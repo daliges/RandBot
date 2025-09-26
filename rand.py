@@ -1,6 +1,6 @@
-import main, re, random
+import app_context, random
 
-bot = main.bot  # Assuming 'bot' is defined in main.py as 'bot'
+bot = app_context.bot  # Assuming 'bot' is defined in main.py as 'bot'
 
 # Function to get the channel name based on the channel_id
 def get_channel_name(channel_id):
@@ -28,7 +28,7 @@ def start(message):
             return
         
         # Store the channel_id for the user (in memory for now, use a database for production)
-        main.user_channel_map[message.from_user.id] = channel_id
+        app_context.user_channel_map[message.from_user.id] = channel_id
 
         channel_name = get_channel_name(channel_id)
         bot.send_message(
@@ -48,17 +48,17 @@ def fetch_random_media(message):
     user_id = message.from_user.id
 
     # Check if the user is associated with a channel
-    if user_id not in main.user_channel_map:
+    if user_id not in app_context.user_channel_map:
         bot.send_message(
             message.chat.id,
             "You are not connected to any channel. Please use the bot via a channel's deep link."
         )
         return
 
-    channel_id = main.user_channel_map[user_id]
+    channel_id = app_context.user_channel_map[user_id]
 
     # Check if the channel is mapped
-    if channel_id not in main.channel_media_map:
+    if channel_id not in app_context.channel_media_map:
         bot.send_message(
             message.chat.id,
             "The channel is not mapped yet. Please ensure the bot is added as an admin to the channel."
@@ -66,7 +66,7 @@ def fetch_random_media(message):
         return
 
     # Fetch a random media message ID
-    media_ids = main.channel_media_map[channel_id]
+    media_ids = app_context.channel_media_map[channel_id]
     if not media_ids:
         bot.send_message(message.chat.id, "No media found in the channel.")
         return

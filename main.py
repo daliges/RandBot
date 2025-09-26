@@ -1,18 +1,21 @@
 import telebot
 from telebot.types import BotCommand, BotCommandScopeDefault, InlineKeyboardMarkup, InlineKeyboardButton
+from app_context import bot, channel_media_map, user_channel_map, telethon_client
 from dotenv import load_dotenv
-import os, re, mapping
-import random
-
+import os, re, app_context
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-bot = telebot.TeleBot(BOT_TOKEN)
+app_context.bot = telebot.TeleBot(BOT_TOKEN)
 
 # In-memory storage for channel media mappings (use a database for production)
-channel_media_map = {}  # {channel_id: [message_id1, message_id2, ...]}
-user_channel_map = {}  # {user_id: channel_id}
+app_context.channel_media_map = {}  # {channel_id: [message_id1, message_id2, ...]}
+app_context.user_channel_map = {}  # {user_id: channel_id}
+
+bot = app_context.bot  # For easier access in this file
+
+import mapping, rand
 
 # Set up bot commands for the side menu
 def set_bot_commands():
@@ -22,7 +25,7 @@ def set_bot_commands():
     ]
     bot.set_my_commands(commands, scope=BotCommandScopeDefault())
 
-@bot.message_handler(commands=['help', 'start'])
+@bot.message_handler(commands=['help'])
 def help(message):
     bot.send_message(
         message.chat.id,
@@ -51,7 +54,7 @@ def handle_chat_member_update(chat_member_update):
     new_status = chat_member_update.new_chat_member.status
     if new_status == 'administrator':
         chat_id = chat_member_update.chat.id
-        print(f"Bot added as admin to channel. Channel ID: {chat_id}")
+        print(f"Bot added as admin to channel. Channel ID: {chat_id}") # add database
 
         # Map all media messages for the channel
         mapping.map_channel_messages(chat_id, bot)
