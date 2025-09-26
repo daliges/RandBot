@@ -1,7 +1,8 @@
 import telebot
 from telebot.types import BotCommand, BotCommandScopeDefault, InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
-import rand, os, re, mapping
+import os, re, mapping
+import random
 
 
 load_dotenv()

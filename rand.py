@@ -18,9 +18,10 @@ def start(message):
     if message.text.startswith('/start channel_'):
         try:
             # Extract everything after 'channel_'
-            channel_id = message.text[len('/start channel_'):]
+            raw_channel_id = message.text[len('/start channel_'):]
             # Convert back underscores to minus for negative channel IDs if needed
-            channel_id = channel_id.replace('_', '-', 1) if channel_id.startswith('_') else channel_id
+            normalized_channel_id = raw_channel_id.replace('_', '-', 1) if raw_channel_id.startswith('_') else raw_channel_id
+            channel_id = int(normalized_channel_id) if normalized_channel_id.lstrip('-').isdigit() else normalized_channel_id
         except (IndexError, ValueError) as e:
             print(f"Error parsing deep link: {e}")
             bot.send_message(message.chat.id, "Invalid deep link format.")
