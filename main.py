@@ -1,13 +1,17 @@
 import telebot
 from telebot.types import BotCommand, BotCommandScopeDefault, InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
-import roll
-import os
+import rand, os, re, mapping
+
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
+
+# In-memory storage for channel media mappings (use a database for production)
+channel_media_map = {}  # {channel_id: [message_id1, message_id2, ...]}
+user_channel_map = {}  # {user_id: channel_id}
 
 # Set up bot commands for the side menu
 def set_bot_commands():
@@ -17,16 +21,12 @@ def set_bot_commands():
     ]
     bot.set_my_commands(commands, scope=BotCommandScopeDefault())
 
-@bot.message_handler(commands=['help'])
+@bot.message_handler(commands=['help', 'start'])
 def help(message):
     bot.send_message(
         message.chat.id,
         "Hello! I'm your Random bot. Use /random to get random media from the channel in private chat with me."
     )
-
-@bot.message_handler(commands=['random'])
-def random_media(message):
-    roll.roll(message, bot)
 
 # Function to send a message with a deep link to the channel
 def send_channel_message_with_deep_link(channel_id):
@@ -51,43 +51,13 @@ def handle_chat_member_update(chat_member_update):
     if new_status == 'administrator':
         chat_id = chat_member_update.chat.id
         print(f"Bot added as admin to channel. Channel ID: {chat_id}")
+
+        # Map all media messages for the channel
+        mapping.map_channel_messages(chat_id, bot)
+
         send_channel_message_with_deep_link(chat_id)
         # add data to database if needed
 
-# Function to get the channel name based on the channel_id
-def get_channel_name(channel_id):
-    try:
-        chat = bot.get_chat(channel_id)  # Fetch chat details using the channel_id
-        return chat.title  # Return the channel's title (name)
-    except Exception as e:
-        print(f"Error fetching channel name for ID {channel_id}: {e}")
-        return "Unknown Channel"  # Fallback if the channel name cannot be retrieved
-
-# Handle the deep link in private chat
-@bot.message_handler(commands=['start'])
-def start(message):
-    # Check if the user started the bot with a deep link
-    if message.text.startswith('/start channel_'):
-        try:
-            # Extract everything after 'channel_'
-            channel_id = message.text[len('/start channel_'):]
-            # Convert back underscores to minus for negative channel IDs if needed
-            channel_id = channel_id.replace('_', '-', 1) if channel_id.startswith('_') else channel_id
-        except (IndexError, ValueError) as e:
-            print(f"Error parsing deep link: {e}")
-            bot.send_message(message.chat.id, "Invalid deep link format.")
-            return
-        channel_name = get_channel_name(channel_id)
-        bot.send_message(
-            message.chat.id,
-            f"Hello! You are now connected to the channel : {channel_name}. "
-            "Use /random to get random media from the channel."
-        )
-    else:
-        bot.send_message(
-            message.chat.id,
-            "Hello! I'm your Random bot. Use /random to get random media."
-        )
 
 set_bot_commands()
 bot.polling(none_stop=True)
