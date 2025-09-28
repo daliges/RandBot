@@ -2,12 +2,15 @@ import telebot
 from telebot.types import BotCommand, BotCommandScopeDefault, InlineKeyboardMarkup, InlineKeyboardButton
 from app_context import bot, channel_media_map, user_channel_map, telethon_client
 from dotenv import load_dotenv
+from telethon_runner import init_telethon
 import os, re, app_context
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 app_context.bot = telebot.TeleBot(BOT_TOKEN)
+
+init_telethon() # start Telethon
 
 # In-memory storage for channel media mappings (use a database for production)
 app_context.channel_media_map = {}  # {channel_id: [message_id1, message_id2, ...]}

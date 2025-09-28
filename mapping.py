@@ -1,62 +1,41 @@
-from telethon.sync import TelegramClient
-from dotenv import load_dotenv
-import app_context, os
+import asyncio
 
-load_dotenv()
-
-TELETHON_API_ID = os.getenv("TELETHON_API_ID")
-TELETHON_API_HASH = os.getenv("TELETHON_API_HASH")
-TELETHON_SESSION_NAME = os.getenv("TELETHON_SESSION_NAME", "telethon_session")
-
-telethon_client = None
-
-try:
-    telethon_api_id_int = int(TELETHON_API_ID) if TELETHON_API_ID else None
-except (TypeError, ValueError):
-    telethon_api_id_int = None
-    print("Invalid TELETHON_API_ID; channel mapping will be skipped.")
-
-if telethon_api_id_int and TELETHON_API_HASH:
-    telethon_client = TelegramClient(
-        TELETHON_SESSION_NAME,
-        telethon_api_id_int,
-        TELETHON_API_HASH,
-    )
-    try:
-        telethon_client.start()
-    except Exception as exc:
-        print(f"Failed to start Telethon client: {exc}")
-        telethon_client = None
-else:
-    print("Telethon credentials missing; channel mapping will be skipped.")
+import app_context
 
 
-async def _collect_media_ids(channel_id: int):
-    media_ids = []
+async def _collect_media_ids(channel_id: int) -> list[int]:
+    client = app_context.telethon_client
+    if client is None:
+        return []
 
-    async for message in telethon_client.iter_messages(channel_id, limit=None):
+    media_ids: list[int] = []
+    async for message in client.iter_messages(channel_id, limit=None):
         if message.media:
             media_ids.append(message.id)
-
     return media_ids
 
 
-# Function to map all media messages in a channel
-def map_channel_messages(channel_id, _):
+def map_channel_messages(channel_id: int, _) -> list[int]:
     if channel_id in app_context.channel_media_map:
         print(f"Channel {channel_id} is already mapped.")
-        return app_context.channel_media_map[channel_id]  # Return cached mapping if it exists
+        return app_context.channel_media_map[channel_id]
 
-    if telethon_client is None:
+    loop = app_context.telethon_loop
+    client = app_context.telethon_client
+    if not loop or not client:
         print("Telethon client is not configured; cannot map channel.")
         return []
 
     try:
-        all_media_ids = telethon_client.loop.run_until_complete(_collect_media_ids(channel_id))
-    except Exception as e:
-        print(f"Error mapping messages for channel {channel_id}: {e}")
+        future = asyncio.run_coroutine_threadsafe(
+            _collect_media_ids(channel_id),
+            loop,
+        )
+        media_ids = future.result()
+    except Exception as exc:
+        print(f"Error mapping messages for channel {channel_id}: {exc}")
         return []
 
-    app_context.channel_media_map[channel_id] = all_media_ids
-    print(f"Mapped {len(all_media_ids)} media messages for channel {channel_id}")
-    return all_media_ids
+    app_context.channel_media_map[channel_id] = media_ids
+    print(f"Mapped {len(media_ids)} media messages for channel {channel_id}")
+    return media_ids
