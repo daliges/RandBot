@@ -1,4 +1,4 @@
-from telebot import TeleBot
+from telebot import TeleBot, types
 from telebot.types import BotCommand, BotCommandScopeDefault
 import app_context, random
 
@@ -90,12 +90,24 @@ def register(bot: TeleBot) -> None:
 
         random_media_id = random.choice(media_ids)
 
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Next"))
+
         # Forward the media to the user
         try:
             bot.forward_message(message.chat.id, channel_id, random_media_id)
+            bot.send_message(
+                message.chat.id,
+                "Click 'Next' to get another one.",
+                reply_markup=markup
+            )
         except Exception as e:
             print(f"Error forwarding media from channel {channel_id}: {e}")
             bot.send_message(
                 message.chat.id,
                 "Failed to fetch media from the channel. Please ensure the bot has access to the channel."
             )
+
+    @bot.message_handler(func=lambda msg: msg.text == "Next")
+    def next_random_media(message):
+        fetch_random_media(message)

@@ -6,9 +6,10 @@ import app_context
 from telethon_runner import init_telethon
 from bot.channel_handlers import register as register_channel
 from bot.private_handlers import register as register_private
-from bot.private_handlers import set_bot_commands  # or keep commands near private handlers
+from bot.private_handlers import set_bot_commands
 
 load_dotenv()
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 app_context.bot = telebot.TeleBot(BOT_TOKEN)
