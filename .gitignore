@@ -151,3 +151,6 @@ __marimo__/
 randbot_session.session
 .session
 .session-journal
+
+# Database files
+.sql 
