@@ -1,6 +1,6 @@
 from telebot import TeleBot, types
 from telebot.types import BotCommand, BotCommandScopeDefault
-import app_context, random
+import app_context, random, databases
 
 
 # Set up bot commands for the side menu
@@ -39,13 +39,15 @@ def register(bot: TeleBot) -> None:
                 # Convert back underscores to minus for negative channel IDs if needed
                 normalized_channel_id = raw_channel_id.replace('_', '-', 1) if raw_channel_id.startswith('_') else raw_channel_id
                 channel_id = int(normalized_channel_id) if normalized_channel_id.lstrip('-').isdigit() else normalized_channel_id
+
+                databases.link_user_to_channel(message.from_user.id, channel_id)
             except (IndexError, ValueError) as e:
                 print(f"Error parsing deep link: {e}")
                 bot.send_message(message.chat.id, "Invalid deep link format.")
                 return
             
             # Store the channel_id for the user (in memory for now, use a database for production)
-            app_context.user_channel_map[message.from_user.id] = channel_id
+            # app_context.user_channel_map[message.from_user.id] = channel_id
 
             channel_name = get_channel_name(channel_id)
             bot.send_message(
@@ -68,7 +70,7 @@ def register(bot: TeleBot) -> None:
         if user_id not in app_context.user_channel_map:
             bot.send_message(
                 message.chat.id,
-                "You are not connected to any channel. Please use the bot via a channel's deep link."
+                "You are not connected to the channel. Please use the bot via a channel's deep link."
             )
             return
 

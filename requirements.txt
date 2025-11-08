@@ -1,3 +1,5 @@
 dotenv
 pyTelegramBotAPI
 telethon 
+redis 
+redis[hiredis]

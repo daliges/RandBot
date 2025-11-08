@@ -1,5 +1,6 @@
 import asyncio
 import app_context
+import databases
 
 
 async def _collect_media_ids(channel_id: int) -> list[int]:
@@ -35,6 +36,6 @@ def map_channel_messages(channel_id: int, _) -> list[int]:
         print(f"Error mapping messages for channel {channel_id}: {exc}")
         return []
 
-    app_context.channel_media_map[channel_id] = media_ids
+    databases.save_channel_media_map(channel_id, media_ids)
     print(f"Mapped {len(media_ids)} media messages for channel {channel_id}")
     return media_ids

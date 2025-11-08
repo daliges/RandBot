@@ -157,3 +157,9 @@ randbot_session.session
 
 # MacOS files
 *.DS_Store
+
+# Redis files
+dump.rdb
+*.rdb
+appendonly.aof
+*.aof
