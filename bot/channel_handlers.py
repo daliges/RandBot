@@ -1,4 +1,4 @@
-from telebot import TeleBot
+from telebot import TeleBot, logger
 from . import mapping
 from .inviter import ensure_mapping_account_added, send_channel_message_with_deep_link
 import sqlite3
@@ -10,11 +10,11 @@ def register(bot: TeleBot) -> None:
         if update.new_chat_member.status != "administrator":
             return
         channel_id = update.chat.id
-        print(f"Bot added as admin to channel. Channel ID: {channel_id}")
+        logger.info(f"Bot added as admin to channel. Channel ID: {channel_id}")
         try:
             channel_name = bot.get_chat(channel_id).title
         except Exception as e:
-            print(f"Failed to get channel info: {e}")
+            logger.error(f"Failed to get channel info for channel {channel_id}: {e}")
             return
 
         databases.add_channel(channel_id, channel_name)

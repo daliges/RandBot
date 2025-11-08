@@ -2,10 +2,12 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Dict, List
+from dotenv import load_dotenv
+import os
 
-CHANNELS_DB = Path("channels.db")
-MAPPINGS_DB = Path("mappings.db")
+load_dotenv()
 
+CHANNELS_DB = Path(os.getenv("CHANNELS_DB_PATH"))
 
 def _connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
@@ -25,7 +27,7 @@ def initialize() -> None:
         )
         conn.commit()
 
-    with _connect(MAPPINGS_DB) as conn:
+    with _connect(CHANNELS_DB) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS mappings (
@@ -39,7 +41,7 @@ def initialize() -> None:
 
 def load_channel_media_map() -> Dict[int, List[int]]:
     media_map: Dict[int, List[int]] = {}
-    with _connect(MAPPINGS_DB) as conn:
+    with _connect(CHANNELS_DB) as conn:
         rows = conn.execute(
             "SELECT channel_id, channel_media_map FROM mappings"
         ).fetchall()
@@ -50,6 +52,8 @@ def load_channel_media_map() -> Dict[int, List[int]]:
             deserialized = json.loads(serialized) if serialized else []
         except json.JSONDecodeError:
             deserialized = []
+        if not isinstance(deserialized, list):
+            deserialized = []
         media_map[row["channel_id"]] = [int(media_id) for media_id in deserialized]
 
     return media_map
@@ -57,7 +61,7 @@ def load_channel_media_map() -> Dict[int, List[int]]:
 
 def save_channel_media_map(channel_id: int, media_ids: List[int]) -> None:
     serialized = json.dumps([int(media_id) for media_id in media_ids])
-    with _connect(MAPPINGS_DB) as conn:
+    with _connect(CHANNELS_DB) as conn:
         conn.execute(
             """
             INSERT INTO mappings (channel_id, channel_media_map)
