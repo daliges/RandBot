@@ -153,4 +153,5 @@ randbot_session.session
 .session-journal
 
 # Database files
-.sql 
+*.sql
+*.db
