@@ -149,8 +149,11 @@ marimo/_lsp/
 __marimo__/
 
 randbot_session.session
-.session
-.session-journal
+*.session
+*.session-journal
 
 # Database files
 *.db
+
+# MacOS files
+*.DS_Store
