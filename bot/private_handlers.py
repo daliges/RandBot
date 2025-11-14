@@ -1,7 +1,6 @@
-from telebot import TeleBot, types
+from telebot import TeleBot, logger, types
 from telebot.types import BotCommand, BotCommandScopeDefault
 import app_context, random, databases
-
 
 # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
@@ -66,32 +65,55 @@ def register(bot: TeleBot) -> None:
     def fetch_random_media(message):
         user_id = message.from_user.id
 
-        # Check if the user is associated with a channel
-        if user_id not in app_context.user_channel_map:
+        try:
+            user_channel_id = databases.get_user_channel(user_id)
+        except Exception as exc:  
+            logger.exception("Failed to read channel for user %s", user_id)
+            bot.send_message(message.chat.id,
+                    "Could not verify your channel link. Please try again later.")
+            return
+
+        if user_channel_id is None:
+            logger.info("User %s requested /random without a linked channel", user_id)
             bot.send_message(
                 message.chat.id,
-                "You are not connected to the channel. Please use the bot via a channel's deep link."
+                "You are not connected to any channel. Use the channel deep link first.",
             )
             return
 
-        channel_id = app_context.user_channel_map[user_id]
+        # if user_channel_id != message.chat.id:
+        #     logger.warning(
+        #         "User %s tried /random in chat %s but is linked to %s",
+        #         user_id,
+        #         message.chat.id,
+        #         user_channel_id,
+        #     )
+        #     bot.send_message(
+        #         message.chat.id,
+        #         "You are linked to a different channel. Switch to that chat or relink."
+        #     )
+        #     return
+
+        channel_id = user_channel_id
 
         # Check if the channel is mapped
-        if channel_id not in app_context.channel_media_map:
-            bot.send_message(
+        try:
+            media_map = databases.get_channel_media_map(channel_id)
+            if not media_map:
+                bot.send_message(
                 message.chat.id,
                 "The channel is not mapped yet. Please ensure the bot is added as an admin to the channel."
-            )
-            return
+                )
+        except Exception as exc:  
+            logger.exception("Failed to read media map for channel %s", channel_id)
+            bot.send_message(message.chat.id,
+                    "Could not fetch media from the channel. Please try again later.")
 
-        # Fetch a random media message ID
-        media_ids = app_context.channel_media_map[channel_id]
-        if not media_ids:
+        if not media_map:
             bot.send_message(message.chat.id, "No media found in the channel.")
             return
 
-        random_media_id = random.choice(media_ids)
-
+        random_media_id = random.choice(media_map)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton("Next"))
 

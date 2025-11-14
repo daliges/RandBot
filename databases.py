@@ -58,24 +58,18 @@ def initialize() -> None:
         conn.commit()
 
 
-def load_channel_media_map() -> Dict[int, List[int]]:
-    media_map: Dict[int, List[int]] = {}
+def get_channel_media_map(channel_id: int) -> list[int]:
     with _connect(CHANNELS_DB) as conn:
-        rows = conn.execute(
-            "SELECT channel_id, channel_media_map FROM mappings"
-        ).fetchall()
-
-    for row in rows:
-        serialized = row["channel_media_map"]
-        try:
-            deserialized = json.loads(serialized) if serialized else []
-        except json.JSONDecodeError:
-            deserialized = []
-        if not isinstance(deserialized, list):
-            deserialized = []
-        media_map[row["channel_id"]] = [int(media_id) for media_id in deserialized]
-
-    return media_map
+        row = conn.execute(
+            "SELECT channel_media_map FROM mappings WHERE channel_id = ?",
+            (channel_id,),
+        ).fetchone()
+    if not row or not row["channel_media_map"]:
+        return []
+    try:
+        return [int(mid) for mid in json.loads(row["channel_media_map"])]
+    except json.JSONDecodeError:
+        return []
 
 
 def save_channel_media_map(channel_id: int, media_ids: List[int]) -> None:

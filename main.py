@@ -20,12 +20,12 @@ init_telethon()
 
 databases.initialize()
 
-try:
-    app_context.channel_media_map = databases.load_channel_media_map()
-except Exception as e:
-    print(f"Error loading channel media map from database or a map is empty: {e}")
-    app_context.channel_media_map = {}
-app_context.user_channel_map = {}
+# try:
+#     app_context.channel_media_map = databases.get_channel_media_map()
+# except Exception as e:
+#     print(f"Error loading channel media map from database or a map is empty: {e}")
+#     app_context.channel_media_map = {}
+# app_context.user_channel_map = {}
 
 bot = app_context.bot
 set_bot_commands(bot)
