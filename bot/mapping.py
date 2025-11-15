@@ -16,9 +16,9 @@ async def _collect_media_ids(channel_id: int) -> list[int]:
 
 
 def map_channel_messages(channel_id: int, _) -> list[int]:
-    if channel_id in app_context.channel_media_map:
+    if databases.is_channel_in_mappings(channel_id):
         print(f"Channel {channel_id} is already mapped.")
-        return app_context.channel_media_map[channel_id]
+        return databases.get_channel_media_map(channel_id)
 
     loop = app_context.telethon_loop
     client = app_context.telethon_client

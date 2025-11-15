@@ -1,6 +1,8 @@
+import json
 from telebot import TeleBot, logger, types
 from telebot.types import BotCommand, BotCommandScopeDefault
 import app_context, random, databases
+from databases import redis_client
 
 # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
@@ -44,9 +46,6 @@ def register(bot: TeleBot) -> None:
                 print(f"Error parsing deep link: {e}")
                 bot.send_message(message.chat.id, "Invalid deep link format.")
                 return
-            
-            # Store the channel_id for the user (in memory for now, use a database for production)
-            # app_context.user_channel_map[message.from_user.id] = channel_id
 
             channel_name = get_channel_name(channel_id)
             bot.send_message(
@@ -81,36 +80,33 @@ def register(bot: TeleBot) -> None:
             )
             return
 
-        # if user_channel_id != message.chat.id:
-        #     logger.warning(
-        #         "User %s tried /random in chat %s but is linked to %s",
-        #         user_id,
-        #         message.chat.id,
-        #         user_channel_id,
-        #     )
-        #     bot.send_message(
-        #         message.chat.id,
-        #         "You are linked to a different channel. Switch to that chat or relink."
-        #     )
-        #     return
-
         channel_id = user_channel_id
 
         # Check if the channel is mapped
+        media_map: list[int] = []
         try:
-            media_map = databases.get_channel_media_map(channel_id)
-            if not media_map:
-                bot.send_message(
-                message.chat.id,
-                "The channel is not mapped yet. Please ensure the bot is added as an admin to the channel."
-                )
-        except Exception as exc:  
-            logger.exception("Failed to read media map for channel %s", channel_id)
-            bot.send_message(message.chat.id,
-                    "Could not fetch media from the channel. Please try again later.")
+            if not redis_client.hget("channel_media_map", str(channel_id)):
 
-        if not media_map:
-            bot.send_message(message.chat.id, "No media found in the channel.")
+                if not databases.is_channel_in_mappings(channel_id):
+                    bot.send_message(
+                        message.chat.id,
+                        "The channel is not mapped yet. " \
+                        "Please ensure the bot is added as an admin to the channel."
+                    )
+                    return
+                else:
+                    media_map = databases.get_channel_media_map(channel_id)
+                    redis_client.hset("channel_media_map", str(channel_id), json.dumps(media_map))
+
+            else:
+                media_map = json.loads(redis_client.hget("channel_media_map", str(channel_id)))
+
+        except Exception as exc:
+            logger.exception("Failed to read media map for channel %s", channel_id)
+            bot.send_message(
+                message.chat.id,
+                "Could not fetch media from the channel. Please try again later."
+            )
             return
 
         random_media_id = random.choice(media_map)

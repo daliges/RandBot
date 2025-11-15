@@ -114,6 +114,14 @@ def link_user_to_channel(user_id: int, channel_id: int) -> None:
         )
         conn.commit()
 
+def is_channel_in_mappings(channel_id: int) -> bool:
+    with _connect(CHANNELS_DB) as conn:
+        row = conn.execute(
+            "SELECT 1 FROM mappings WHERE channel_id = ?",
+            (channel_id,),
+        ).fetchone()
+    return row is not None
+
 def get_user_channel(user_id: int) -> int | None:
     with _connect(CHANNELS_DB) as conn:
         row = conn.execute(
