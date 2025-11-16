@@ -1,14 +1,19 @@
 import json
 from telebot import TeleBot, logger, types
 from telebot.types import BotCommand, BotCommandScopeDefault
-import app_context, random, databases
+from bot import mapping
+from bot.join_helpers import _extract_channel_link, _join_channel
+import random, databases
 from databases import redis_client
+from telethon.errors import ChannelPrivateError, FloodWaitError, InviteHashInvalidError, InviteHashExpiredError
 
 # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
     commands = [
         BotCommand("help", "Help and information about the bot"),
-        BotCommand("random", "Get random media from the channel")
+        BotCommand("random", "Get random media from the channel"),
+        BotCommand("link", "Link your channel to the bot"),
+        BotCommand("admin", "Admin help info")
     ]
     bot.set_my_commands(commands, scope=BotCommandScopeDefault())
 
@@ -17,7 +22,21 @@ def register(bot: TeleBot) -> None:
     def help(message):
         bot.send_message(
             message.chat.id,
-            "Hello! I'm your Random bot. Use /random to get random media from the channel in private chat with me."
+            "This bot allows you to get random media from a linked channel. " \
+            "Use /link to link your channel and /random to get random media." \
+            "You can also use the deep link sent to your channel to link it."
+        )
+
+
+    @bot.message_handler(commands=['admin'])
+    def admin_help(message):
+        bot.send_message(
+            message.chat.id,
+            "If you are admin of a channel, add the bot as an admin to the channel " \
+            "grant it permission to post messages and add subscribers. " \
+            "" \
+            "Don't worry, the bot will add only one subscriber account " \
+            "for proper functionality. "
         )
 
     # Function to get the channel name based on the channel_id
@@ -56,7 +75,12 @@ def register(bot: TeleBot) -> None:
         else:
             bot.send_message(
                 message.chat.id,
-                "Hello! I'm your Random bot. Use /random to get random media."
+                "Hello! I'm your Random bot. " \
+                "" \
+                "Use /help to see help information. " \
+                "" \
+                "You can link any channel by using command /link " \
+                "or use the deep link sent to your channel. "
             )
 
     # Command to fetch random media
@@ -97,12 +121,29 @@ def register(bot: TeleBot) -> None:
                 else:
                     media_map = databases.get_channel_media_map(channel_id)
                     redis_client.hset("channel_media_map", str(channel_id), json.dumps(media_map))
+                    redis_client.expire(f"channel_media_map:{channel_id}", 3600)
 
             else:
-                media_map = json.loads(redis_client.hget("channel_media_map", str(channel_id)))
+                loaded_data = json.loads(redis_client.hget("channel_media_map", str(channel_id)))
+                if not isinstance(loaded_data, list):
+                    raise ValueError(f"Invalid media_map format in Redis for channel {channel_id}")
+                media_map = loaded_data
 
+            if not media_map:
+                bot.send_message(
+                    message.chat.id,
+                    "No media available in this channel yet. Please ensure the channel has media."
+                )
+                return
+
+        except redis_client.RedisError as exc:
+            logger.exception("Redis error while fetching media map for channel %s", channel_id)
+            # Optionally: fallback to database-only read
+        except databases.DatabaseError as exc:
+            logger.exception("Database error while fetching media map for channel %s", channel_id)
         except Exception as exc:
-            logger.exception("Failed to read media map for channel %s", channel_id)
+            logger.exception("Unexpected error while fetching media map for channel %s", channel_id)
+
             bot.send_message(
                 message.chat.id,
                 "Could not fetch media from the channel. Please try again later."
@@ -131,3 +172,45 @@ def register(bot: TeleBot) -> None:
     @bot.message_handler(func=lambda msg: msg.text == "Next")
     def next_random_media(message):
         fetch_random_media(message)
+
+    @bot.message_handler(commands=['link'])
+    def link_channel(message):
+        bot.send_message(
+            message.chat.id,
+            "To link your channel, please send me the invite link to the channel. "
+        )
+
+    # Command to link a channel
+    @bot.message_handler(func=lambda m: bool(m.text) and _extract_channel_link(m.text))
+    def handle_channel_link(message):
+        link = _extract_channel_link(message.text)
+        bot.send_message(message.chat.id, "Processing the channel link, please wait…")
+
+        try:
+            entity = _join_channel(link)
+        except (ChannelPrivateError, InviteHashInvalidError, InviteHashExpiredError):
+            bot.send_message(message.chat.id, "I can’t access that channel. Check the invite link and try again.")
+            return
+        except FloodWaitError as fw:
+            bot.send_message(message.chat.id, f"Telegram asked me to wait {fw.seconds}s before joining. Try again later.")
+            return
+        except Exception as exc:
+            logger.exception("Failed to join channel via Telethon")
+            bot.send_message(message.chat.id, "Joining the channel failed. Please try again later.")
+            return
+
+        channel_id = entity.id
+        channel_name = getattr(entity, "title", "Unknown channel")
+
+        databases.add_channel(channel_id, channel_name)
+        databases.link_user_to_channel(message.from_user.id, channel_id)
+
+        media_ids = mapping.map_channel_messages(channel_id, bot)
+        if not media_ids:
+            bot.send_message(message.chat.id, "I couldn’t map any media (maybe the channel forbids forwarding?).")
+            return
+
+        bot.send_message(
+            message.chat.id,
+            f"Joined {channel_name}. Use /random to pull them."
+        )

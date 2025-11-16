@@ -1,11 +1,11 @@
 import os
 from dotenv import load_dotenv
 import telebot
-import sqlite3
-import json
-
 import app_context
 import databases
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from telethon_runner import init_telethon
 from bot.channel_handlers import register as register_channel
 from bot.private_handlers import register as register_private
@@ -15,17 +15,21 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+session = requests.Session()
+retry = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=(500, 502, 503, 504),
+    allowed_methods=("GET", "POST"),
+)
+adapter = HTTPAdapter(max_retries=retry)
+session.mount("https://", adapter)
+telebot.apihelper.session = session
+
 app_context.bot = telebot.TeleBot(BOT_TOKEN)
 init_telethon()
 
 databases.initialize()
-
-# try:
-#     app_context.channel_media_map = databases.get_channel_media_map()
-# except Exception as e:
-#     print(f"Error loading channel media map from database or a map is empty: {e}")
-#     app_context.channel_media_map = {}
-# app_context.user_channel_map = {}
 
 bot = app_context.bot
 set_bot_commands(bot)

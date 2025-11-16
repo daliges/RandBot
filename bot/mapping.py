@@ -1,6 +1,11 @@
 import asyncio
 import app_context
 import databases
+import threading
+
+
+_mapping_locks: dict[int, threading.Lock] = {}
+_locks_lock = threading.Lock()
 
 
 async def _collect_media_ids(channel_id: int) -> list[int]:
@@ -14,11 +19,23 @@ async def _collect_media_ids(channel_id: int) -> list[int]:
             media_ids.append(message.id)
     return media_ids
 
-
 def map_channel_messages(channel_id: int, _) -> list[int]:
-    if databases.is_channel_in_mappings(channel_id):
-        print(f"Channel {channel_id} is already mapped.")
-        return databases.get_channel_media_map(channel_id)
+    with _locks_lock:
+        if channel_id not in _mapping_locks:
+            _mapping_locks[channel_id] = threading.Lock()
+        lock = _mapping_locks[channel_id]
+    
+    with lock:
+        try:
+            if databases.is_channel_in_mappings(channel_id):
+                print(f"Channel {channel_id} is already mapped.")
+                return databases.get_channel_media_map(channel_id)
+        except Exception as exc:
+            print(f"Error checking channel mapping: {exc}")
+            # Fall through to re-collect if database check fails
+        except Exception as exc:
+            print(f"Error checking channel mapping: {exc}")
+            # Fall through to re-collect if database check fails
 
     loop = app_context.telethon_loop
     client = app_context.telethon_client
