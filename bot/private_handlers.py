@@ -1,14 +1,15 @@
 import json
 from telebot import TeleBot, logger, types
 from telebot.types import BotCommand, BotCommandScopeDefault
-import app_context, random, databases
+import random, databases
 from databases import redis_client
 
 # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
     commands = [
         BotCommand("help", "Help and information about the bot"),
-        BotCommand("random", "Get random media from the channel")
+        BotCommand("random", "Get random media from the channel"),
+        BotCommand("admin", "Admin help info")
     ]
     bot.set_my_commands(commands, scope=BotCommandScopeDefault())
 
@@ -131,3 +132,5 @@ def register(bot: TeleBot) -> None:
     @bot.message_handler(func=lambda msg: msg.text == "Next")
     def next_random_media(message):
         fetch_random_media(message)
+
+    
