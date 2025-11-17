@@ -1,9 +1,6 @@
 import os
 from dotenv import load_dotenv
 import telebot
-import sqlite3
-import json
-
 import app_context
 import databases
 from telethon_runner import init_telethon
@@ -19,13 +16,6 @@ app_context.bot = telebot.TeleBot(BOT_TOKEN)
 init_telethon()
 
 databases.initialize()
-
-# try:
-#     app_context.channel_media_map = databases.get_channel_media_map()
-# except Exception as e:
-#     print(f"Error loading channel media map from database or a map is empty: {e}")
-#     app_context.channel_media_map = {}
-# app_context.user_channel_map = {}
 
 bot = app_context.bot
 set_bot_commands(bot)

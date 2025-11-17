@@ -3,3 +3,4 @@ pyTelegramBotAPI
 telethon 
 redis 
 redis[hiredis]
+pytest

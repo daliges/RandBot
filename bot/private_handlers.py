@@ -4,10 +4,11 @@ from telebot.types import BotCommand, BotCommandScopeDefault
 import random, databases
 from databases import redis_client
 
-# Set up bot commands for the side menu
+# # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
+    bot.delete_my_commands(scope=BotCommandScopeDefault())
     commands = [
-        BotCommand("help", "Help and information about the bot"),
+        BotCommand("help", "Help and info about the bot"),
         BotCommand("random", "Get random media from the channel"),
         BotCommand("admin", "Admin help info")
     ]
@@ -18,7 +19,20 @@ def register(bot: TeleBot) -> None:
     def help(message):
         bot.send_message(
             message.chat.id,
-            "Hello! I'm your Random bot. Use /random to get random media from the channel in private chat with me."
+            "This bot allows you to get random media from the channel you link via deep link. " \
+            "\nUse command /random to get random media from the channel " \
+            "\nIf you are an admin, use /admin for admin help."
+        )
+
+    @bot.message_handler(commands=['admin'])
+    def admin_help(message):
+        bot.send_message(
+            message.chat.id,
+            "Admin Help:\n" \
+            "Add the bot as an admin to your channel with permission to post messages " \
+            "and add subscribers.\n" \
+            "Don't worry the bot will add only one subscriber (itself) to your channel.\n" \
+            "Its made to ensure the bot can function properly." \
         )
 
     # Function to get the channel name based on the channel_id
