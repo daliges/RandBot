@@ -32,7 +32,7 @@ def register(bot: TeleBot) -> None:
             "Add the bot as an admin to your channel with permission to post messages " \
             "and add subscribers.\n" \
             "Don't worry the bot will add only one subscriber (itself) to your channel.\n" \
-            "Its made to ensure the bot can function properly." \
+            "It's made to ensure the bot can function properly." \
         )
 
     # Function to get the channel name based on the channel_id

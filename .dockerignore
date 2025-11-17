@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+channels.db
+*.session*

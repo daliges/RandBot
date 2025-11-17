@@ -1,0 +1,17 @@
+services:
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+
+  bot:
+    build: .
+    env_file: .env
+    depends_on:
+      - redis
+    volumes:
+      - ./channels.db:/app/channels.db
+      - ./randbot.session:/app/randbot.session
+
+volumes:
+  redis-data:
