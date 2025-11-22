@@ -1,8 +1,10 @@
 import json
 from telebot import TeleBot, logger, types
 from telebot.types import BotCommand, BotCommandScopeDefault
+from telebot.apihelper import ApiTelegramException
 import random, databases
 from databases import redis_client
+from bot.channel_watchers import _persist_map
 
 # # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
@@ -124,24 +126,38 @@ def register(bot: TeleBot) -> None:
             )
             return
 
-        random_media_id = random.choice(media_map)
+        attempts = len(media_map)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton("Next"))
 
         # Forward the media to the user
-        try:
-            bot.forward_message(message.chat.id, channel_id, random_media_id)
-            bot.send_message(
-                message.chat.id,
-                "Click 'Next' to get another one.",
-                reply_markup=markup
-            )
-        except Exception as e:
-            print(f"Error forwarding media from channel {channel_id}: {e}")
-            bot.send_message(
-                message.chat.id,
-                "Failed to fetch media from the channel. Please ensure the bot has access to the channel."
-            )
+        while media_map and attempts:
+            random_media_id = random.choice(media_map)
+            try:
+                bot.forward_message(message.chat.id, channel_id, random_media_id)
+                bot.send_message(
+                    message.chat.id,
+                    "Click 'Next' to get another one.",
+                    reply_markup=markup,
+                )
+                return
+            except ApiTelegramException as exc:
+                text = getattr(getattr(exc, "result", None), "text", "") or ""
+                if "message to forward not found" in text.lower():
+                    media_map = [mid for mid in media_map if mid != random_media_id]
+                    _persist_map(channel_id, media_map)
+                    attempts -= 1
+                    continue
+                logger.exception("Telegram API error for channel %s: %s", channel_id, exc)
+                break
+            except Exception as exc:
+                logger.exception("Error forwarding media from channel %s: %s", channel_id, exc)
+                break
+
+        bot.send_message(
+            message.chat.id,
+            "Failed to fetch media from the channel. The mapping was refreshed; please try again later.",
+        )
 
     @bot.message_handler(func=lambda msg: msg.text == "Next")
     def next_random_media(message):

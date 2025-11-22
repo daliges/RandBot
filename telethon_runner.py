@@ -2,6 +2,7 @@ import asyncio, threading, os
 from telethon import TelegramClient
 from dotenv import load_dotenv
 import app_context
+from bot import channel_watchers
 
 load_dotenv()
 
@@ -20,6 +21,7 @@ def _loop_thread():
 
     app_context.telethon_loop = loop
     app_context.telethon_client = client
+    channel_watchers.register(client)
     loop.run_forever()
 
 def init_telethon():

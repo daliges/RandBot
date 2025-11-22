@@ -11,7 +11,7 @@ services:
       - redis
     volumes:
       - ./channels.db:/app/channels.db
-      - ./randbot.session:/app/randbot.session
+      - ./randbot.dev.session:/app/randbot.dev.session
 
 volumes:
   redis-data:

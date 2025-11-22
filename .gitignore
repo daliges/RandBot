@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.pytest_cache/
 *.py[codz]
 *$py.class
 
@@ -98,8 +99,11 @@ celerybeat.pid
 
 # Environments
 .env
+.env.dev 
+.env.prod
 .envrc
 .venv
+.venv/
 venv/
 env/
 venv/
@@ -149,8 +153,10 @@ marimo/_lsp/
 __marimo__/
 
 randbot_session.session
+randbot_session/
 *.session
 *.session-journal
+randbot.dev.session
 
 # Database files
 *.db
@@ -163,3 +169,6 @@ dump.rdb
 *.rdb
 appendonly.aof
 *.aof
+
+# Other files
+pics/
