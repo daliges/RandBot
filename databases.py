@@ -55,6 +55,69 @@ def initialize() -> None:
                 ON channel_users(channel_id);
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bundles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                channel_id INTEGER NOT NULL,
+                stars_paid INTEGER NOT NULL,
+                purchased_quota INTEGER NOT NULL,
+                free_quota INTEGER NOT NULL DEFAULT 0,
+                consumed_free INTEGER NOT NULL DEFAULT 0,
+                consumed_paid INTEGER NOT NULL DEFAULT 0,
+                starts_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active', -- active | expired | refunded | credited
+                telegram_charge_id TEXT,
+                FOREIGN KEY (channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE
+                );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS 
+                idx_bundles_channel_status ON bundles(channel_id, status);
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                channel_id INTEGER NOT NULL,
+                bundle_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'subscribed', -- subscribed | left | duplicate
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, channel_id),
+                FOREIGN KEY (channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE,
+                FOREIGN KEY (bundle_id) REFERENCES bundles(id) ON DELETE SET NULL
+                );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS 
+                idx_subscriptions_channel ON subscriptions(channel_id);
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS refunds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bundle_id INTEGER NOT NULL,
+                stars_refunded INTEGER NOT NULL,
+                method TEXT NOT NULL, -- refund | credit
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (bundle_id) REFERENCES bundles(id) ON DELETE CASCADE
+                );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS 
+                idx_refunds_bundle ON refunds(bundle_id);
+            """
+        )
         conn.commit()
 
 
