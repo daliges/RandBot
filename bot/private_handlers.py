@@ -4,7 +4,7 @@ from telebot.types import BotCommand, BotCommandScopeDefault
 from telebot.apihelper import ApiTelegramException
 import random, databases
 from databases import redis_client
-from bot.channel_watchers import _persist_map
+from bot.channel_watchers import _persist_map, MEDIA_CACHE_KEY
 
 # # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
@@ -15,6 +15,20 @@ def set_bot_commands(bot: TeleBot) -> None:
         BotCommand("admin", "Admin help info")
     ]
     bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+
+
+def _load_media_map(channel_id: int) -> list[int]:
+    cached = redis_client.hget(MEDIA_CACHE_KEY, str(channel_id))
+    if cached:
+        try:
+            return json.loads(cached)
+        except Exception:
+            redis_client.hdel(MEDIA_CACHE_KEY, str(channel_id))
+    media_map = databases.get_channel_media_map(channel_id)
+    if media_map:
+        redis_client.hset(MEDIA_CACHE_KEY, str(channel_id), json.dumps(media_map))
+    return media_map
+
 
 def register(bot: TeleBot) -> None:
     @bot.message_handler(commands=['help'])
@@ -81,82 +95,93 @@ def register(bot: TeleBot) -> None:
     def fetch_random_media(message):
         user_id = message.from_user.id
 
+        # try:
+        #     user_channel_id = databases.get_user_channel(user_id)
+        # except Exception as exc:  
+        #     logger.exception("Failed to read channel for user %s", user_id)
+        #     bot.send_message(message.chat.id,
+        #             "Could not verify your channel link. Please try again later.")
+        #     return
+
+        # if user_channel_id is None:
+        #     logger.info("User %s requested /random without a linked channel", user_id)
+        #     bot.send_message(
+        #         message.chat.id,
+        #         "You are not connected to any channel. Use the channel deep link first.",
+        #     )
+        #     return
+
+        # channel_id = user_channel_id
+
+
+        # # Check if the channel is mapped
+        # media_map: list[int] = []
+        # try:
+        #     if not redis_client.hget("channel_media_map", str(channel_id)):
+
+        #         if not databases.is_channel_in_mappings(channel_id):
+        #             bot.send_message(
+        #                 message.chat.id,
+        #                 "The channel is not mapped yet. " \
+        #                 "Please ensure the bot is added as an admin to the channel."
+        #             )
+        #             return
+        #         else:
+        #             media_map = databases.get_channel_media_map(channel_id)
+        #             redis_client.hset("channel_media_map", str(channel_id), json.dumps(media_map))
+
+        #     else:
+        #         media_map = json.loads(redis_client.hget("channel_media_map", str(channel_id)))
+
+        # except Exception as exc:
+        #     logger.exception("Failed to read media map for channel %s", channel_id)
+        #     bot.send_message(
+        #         message.chat.id,
+        #         "Could not fetch media from the channel. Please try again later."
+        #     )
+        #     return
+
         try:
-            user_channel_id = databases.get_user_channel(user_id)
-        except Exception as exc:  
-            logger.exception("Failed to read channel for user %s", user_id)
-            bot.send_message(message.chat.id,
-                    "Could not verify your channel link. Please try again later.")
+            channel_ids = databases.get_mapped_channel_ids()
+        except Exception:
+            logger.exception("Failed to list mapped channels")
+            bot.send_message(message.chat.id, "Could not load channels, try again later.")
             return
 
-        if user_channel_id is None:
-            logger.info("User %s requested /random without a linked channel", user_id)
-            bot.send_message(
-                message.chat.id,
-                "You are not connected to any channel. Use the channel deep link first.",
-            )
+        if not channel_ids:
+            bot.send_message(message.chat.id, "No channels are mapped yet.")
             return
 
-        channel_id = user_channel_id
+        random.shuffle(channel_ids)  # randomize channel choice
 
-        # Check if the channel is mapped
-        media_map: list[int] = []
-        try:
-            if not redis_client.hget("channel_media_map", str(channel_id)):
-
-                if not databases.is_channel_in_mappings(channel_id):
-                    bot.send_message(
-                        message.chat.id,
-                        "The channel is not mapped yet. " \
-                        "Please ensure the bot is added as an admin to the channel."
-                    )
-                    return
-                else:
-                    media_map = databases.get_channel_media_map(channel_id)
-                    redis_client.hset("channel_media_map", str(channel_id), json.dumps(media_map))
-
-            else:
-                media_map = json.loads(redis_client.hget("channel_media_map", str(channel_id)))
-
-        except Exception as exc:
-            logger.exception("Failed to read media map for channel %s", channel_id)
-            bot.send_message(
-                message.chat.id,
-                "Could not fetch media from the channel. Please try again later."
-            )
-            return
-
-        attempts = len(media_map)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton("Next"))
 
-        # Forward the media to the user
-        while media_map and attempts:
-            random_media_id = random.choice(media_map)
-            try:
-                bot.forward_message(message.chat.id, channel_id, random_media_id)
-                bot.send_message(
-                    message.chat.id,
-                    "Click 'Next' to get another one.",
-                    reply_markup=markup,
-                )
-                return
-            except ApiTelegramException as exc:
-                text = getattr(getattr(exc, "result", None), "text", "") or ""
-                if "message to forward not found" in text.lower():
-                    media_map = [mid for mid in media_map if mid != random_media_id]
-                    _persist_map(channel_id, media_map)
-                    attempts -= 1
-                    continue
-                logger.exception("Telegram API error for channel %s: %s", channel_id, exc)
-                break
-            except Exception as exc:
-                logger.exception("Error forwarding media from channel %s: %s", channel_id, exc)
-                break
+        for channel_id in channel_ids:
+            media_map = _load_media_map(channel_id)
+            attempts = min(len(media_map), 10)
+            while media_map and attempts:
+                random_media_id = random.choice(media_map)
+                try:
+                    bot.forward_message(message.chat.id, channel_id, random_media_id)
+                    bot.send_message(message.chat.id, "Click 'Next' to get another one.", reply_markup=markup)
+                    return
+                except ApiTelegramException as exc:
+                    text = getattr(getattr(exc, "result", None), "text", "").lower()
+                    if "message to forward not found" in text or "message_id_invalid" in text or "message id invalid" in text:
+                        media_map = [mid for mid in media_map if mid != random_media_id]
+                        _persist_map(channel_id, media_map)
+                        attempts -= 1
+                        continue
+                    logger.exception("Telegram API error for channel %s", channel_id)
+                    break
+                except Exception:
+                    logger.exception("Error forwarding media from channel %s", channel_id)
+                    break
 
         bot.send_message(
             message.chat.id,
-            "Failed to fetch media from the channel. The mapping was refreshed; please try again later.",
+            "Failed to fetch media. Please try again later.",
         )
 
     @bot.message_handler(func=lambda msg: msg.text == "Next")

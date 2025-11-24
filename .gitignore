@@ -1,6 +1,5 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-.pytest_cache/
 *.py[codz]
 *$py.class
 
@@ -105,8 +104,10 @@ celerybeat.pid
 .venv
 .venv/
 venv/
-env/
+.venv
+.venv/
 venv/
+env/
 ENV/
 env.bak/
 venv.bak/

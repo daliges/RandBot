@@ -137,3 +137,9 @@ def get_channel_users(channel_id: int) -> list[int]:
             (channel_id,),
         ).fetchall()
     return [row["user_id"] for row in rows]
+
+
+def get_mapped_channel_ids() -> list[int]:
+    with _connect(CHANNELS_DB) as conn:
+        rows = conn.execute("SELECT channel_id FROM mappings").fetchall()
+    return [row["channel_id"] for row in rows]
