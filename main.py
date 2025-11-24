@@ -4,7 +4,7 @@ import telebot
 import app_context
 import databases
 from telethon_runner import init_telethon
-from bot.channel_handlers import register as register_channel
+from bot.channel_handlers import register as register_channel, register_payments
 from bot.private_handlers import register as register_private
 from bot.private_handlers import set_bot_commands
 
@@ -20,6 +20,7 @@ databases.initialize()
 bot = app_context.bot
 set_bot_commands(bot)
 register_channel(bot)
+register_payments(bot)
 register_private(bot)
 
 bot.polling(none_stop=True)

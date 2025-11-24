@@ -67,7 +67,7 @@ def initialize() -> None:
                 consumed_paid INTEGER NOT NULL DEFAULT 0,
                 starts_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active', -- active | expired | refunded | credited
+                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'expired', 'refunded', 'credited')),
                 telegram_charge_id TEXT,
                 FOREIGN KEY (channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE
                 );
@@ -86,7 +86,7 @@ def initialize() -> None:
                 user_id INTEGER NOT NULL,
                 channel_id INTEGER NOT NULL,
                 bundle_id INTEGER,
-                status TEXT NOT NULL DEFAULT 'subscribed', -- subscribed | left | duplicate
+                status TEXT NOT NULL DEFAULT 'subscribed' CHECK(status IN ('subscribed', 'left', 'duplicate')),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, channel_id),
                 FOREIGN KEY (channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE,
@@ -106,7 +106,7 @@ def initialize() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 bundle_id INTEGER NOT NULL,
                 stars_refunded INTEGER NOT NULL,
-                method TEXT NOT NULL, -- refund | credit
+                method TEXT NOT NULL CHECK(method IN ('refund', 'credit')),
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (bundle_id) REFERENCES bundles(id) ON DELETE CASCADE
                 );

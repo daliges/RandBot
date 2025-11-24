@@ -28,8 +28,9 @@ def create_bundle(channel_id: int, stars_paid: int, purchased_quota: int, free_q
 def record_subscription(user_id: int, channel_id: int, bundle_id: int | None = None) -> bool:
     # returns True if newly recorded, False if duplicate
     with _connect(CHANNELS_DB) as conn:
+        cur = None
         try:
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO subscriptions (user_id, channel_id, bundle_id)
                 VALUES (?, ?, ?)
@@ -39,30 +40,34 @@ def record_subscription(user_id: int, channel_id: int, bundle_id: int | None = N
             )
         except sqlite3.OperationalError:
             # SQLite <3.24 may not support DO NOTHING; fallback to ignore
-            conn.execute(
+            cur = conn.execute(
                 "INSERT OR IGNORE INTO subscriptions (user_id, channel_id, bundle_id) VALUES (?, ?, ?)",
                 (user_id, channel_id, bundle_id),
             )
-        changes = conn.total_changes
-        if changes:
+        if cur and cur.rowcount > 0:
             _increment_consumption(conn, bundle_id)
         conn.commit()
-        return bool(changes)
+        return bool(cur and cur.rowcount > 0)
+
 
 def _increment_consumption(conn: sqlite3.Connection, bundle_id: int | None) -> None:
     if not bundle_id:
         return
-    row = conn.execute(
-        "SELECT free_quota, consumed_free FROM bundles WHERE id = ? AND status = 'active'",
-        (bundle_id,),
-    ).fetchone()
-    if not row:
-        return
-    free_remaining = row["free_quota"] - row["consumed_free"]
-    if free_remaining > 0:
-        conn.execute("UPDATE bundles SET consumed_free = consumed_free + 1 WHERE id = ?", (bundle_id,))
-    else:
-        conn.execute("UPDATE bundles SET consumed_paid = consumed_paid + 1 WHERE id = ?", (bundle_id,))
+    conn.execute(
+        """
+        UPDATE bundles
+            SET consumed_free = CASE
+                    WHEN free_quota > consumed_free THEN consumed_free + 1
+                    ELSE consumed_free
+                END,
+                consumed_paid = CASE
+                    WHEN free_quota > consumed_free THEN consumed_paid
+                ELSE consumed_paid + 1
+            END
+            WHERE id = ? AND status = 'active'
+        """,
+    (bundle_id,),
+    )
 
 def get_active_bundle(channel_id: int) -> dict | None:
     with _connect(CHANNELS_DB) as conn:
