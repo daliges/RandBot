@@ -27,7 +27,8 @@ def initialize() -> None:
             """
             CREATE TABLE IF NOT EXISTS channels (
                 channel_id INTEGER PRIMARY KEY,
-                channel_name TEXT NOT NULL
+                channel_name TEXT NOT NULL,
+                admin_id INTEGER NOT NULL
             )
             """
         )
@@ -150,16 +151,17 @@ def save_channel_media_map(channel_id: int, media_ids: List[int]) -> None:
         conn.commit()
 
 
-def add_channel(channel_id: int, channel_name: str) -> None:
+def add_channel(channel_id: int, channel_name: str, admin_id: int | None = None) -> None:
     with _connect(CHANNELS_DB) as conn:
         conn.execute(
             """
-            INSERT INTO channels (channel_id, channel_name)
-            VALUES (?, ?)
+            INSERT INTO channels (channel_id, channel_name, admin_id)
+            VALUES (?, ?, ?)
             ON CONFLICT(channel_id) DO UPDATE
-                SET channel_name = excluded.channel_name
+                SET channel_name = excluded.channel_name,
+                admin_id = COALESCE(excluded.admin_id, admin_id)
             """,
-            (channel_id, channel_name),
+            (channel_id, channel_name, admin_id),
         )
         conn.commit()
 
@@ -206,3 +208,19 @@ def get_mapped_channel_ids() -> list[int]:
     with _connect(CHANNELS_DB) as conn:
         rows = conn.execute("SELECT channel_id FROM mappings").fetchall()
     return [row["channel_id"] for row in rows]
+
+
+def set_channel_admin(channel_id: int, admin_id: int) -> None:
+    with _connect(CHANNELS_DB) as conn:
+        cursor = conn.execute(
+            "UPDATE channels SET admin_id = ? WHERE channel_id = ?",
+            (admin_id, channel_id)
+        )
+        if cursor.rowcount == 0:
+            raise ValueError(f"Channel {channel_id} not found")
+        conn.commit()
+
+def get_channel_admin(channel_id: int) -> int | None:
+    with _connect(CHANNELS_DB) as conn:
+        row = conn.execute("SELECT admin_id FROM channels WHERE channel_id = ?", (channel_id,)).fetchone()
+    return row["admin_id"] if row else None

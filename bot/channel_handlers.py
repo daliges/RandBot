@@ -5,7 +5,6 @@ from .inviter import ensure_mapping_account_added, send_channel_message_with_dee
 import databases
 import pay_databases
 
-_channel_admin_added_by: dict[int, int] = {}
 
 FREE_TRIAL_QUOTA = 10
 BUNDLE_OPTIONS = {
@@ -57,7 +56,9 @@ def register(bot: TeleBot) -> None:
             logger.error(f"Failed to get channel info for channel {channel_id}: {e}")
             return
 
-        databases.add_channel(channel_id, channel_name)
+        from_user = getattr(update, "from_user", None)
+        admin_id = from_user.id if from_user else None
+        databases.add_channel(channel_id, channel_name, admin_id)
 
         if not ensure_mapping_account_added(channel_id, bot):
             return
@@ -65,7 +66,8 @@ def register(bot: TeleBot) -> None:
         mapping.map_channel_messages(channel_id, bot)
         send_channel_message_with_deep_link(bot, channel_id)
 
-        admin_id = getattr(update, "from_user", None).id if getattr(update, "from_user", None) else None
+        from_user = getattr(update, "from_user", None)
+        admin_id = from_user.id if from_user else None
         _prompt_bundle_purchase(bot, update.chat.id, admin_id)
 
     @bot.callback_query_handler(func=lambda call: call.data and call.data.startswith("buy_bundle:"))
@@ -140,7 +142,7 @@ def register_payments(bot: TeleBot) -> None:
             return
         admin_id = getattr(update, "from_user", None).id if getattr(update, "from_user", None) else None
         if admin_id:
-            _channel_admin_added_by[update.chat.id] = admin_id
+            databases.set_channel_admin(update.chat.id, admin_id)
 
         # Start free trial bundle if none active
         active = pay_databases.get_active_bundle(update.chat.id)
@@ -194,5 +196,5 @@ def register_payments(bot: TeleBot) -> None:
         free_exhausted = summary["consumed_free"] >= summary["free_quota"]
         if free_exhausted and summary["purchased_quota"] == 0 and summary["status"] == "active":
             pay_databases.mark_bundle_status(active["id"], "expired")
-            admin_id = _channel_admin_added_by.get(channel_id)
+            admin_id = databases.get_channel_admin(channel_id)
             _prompt_bundle_purchase(bot, channel_id, admin_id)

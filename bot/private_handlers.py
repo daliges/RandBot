@@ -1,10 +1,14 @@
 import json
+import os
 from telebot import TeleBot, logger, types
 from telebot.types import BotCommand, BotCommandScopeDefault
 from telebot.apihelper import ApiTelegramException
 import random, databases
 from databases import redis_client
 from bot.channel_watchers import _persist_map, MEDIA_CACHE_KEY
+
+CHANNEL_IDS_CACHE_KEY = os.getenv("CHANNEL_IDS_CACHE_KEY")
+CHANNEL_IDS_TTL = int(os.getenv("CHANNEL_IDS_TTL"))
 
 # # Set up bot commands for the side menu
 def set_bot_commands(bot: TeleBot) -> None:
@@ -30,6 +34,33 @@ def _load_media_map(channel_id: int) -> list[int]:
     if media_map:
         redis_client.hset(MEDIA_CACHE_KEY, str(channel_id), json.dumps(media_map))
     return media_map
+
+
+def _get_channel_ids() -> list[int]:
+    # try Redis first
+    cached = redis_client.get(CHANNEL_IDS_CACHE_KEY)
+    if cached:
+        try:
+            return json.loads(cached)
+        except json.JSONDecodeError:
+            redis_client.delete(CHANNEL_IDS_CACHE_KEY)
+
+    # fallback to DB
+    try:
+        ids = databases.get_mapped_channel_ids()
+    except Exception:
+        logger.exception("Failed to list mapped channels")
+        return []
+
+    if ids:
+        redis_client.setex(CHANNEL_IDS_CACHE_KEY, CHANNEL_IDS_TTL, json.dumps(ids))
+    return ids
+
+
+def _refresh_channel_ids_cache() -> list[int]:
+    redis_client.delete(CHANNEL_IDS_CACHE_KEY)
+    ids = _get_channel_ids()
+    return ids
 
 
 def register(bot: TeleBot) -> None:
@@ -62,6 +93,7 @@ def register(bot: TeleBot) -> None:
             print(f"Error fetching channel name for ID {channel_id}: {e}")
             return "Unknown Channel"  # Fallback if the channel name cannot be retrieved
 
+
     # Handle the deep link in private chat
     @bot.message_handler(commands=['start'])
     def start(message):
@@ -92,48 +124,44 @@ def register(bot: TeleBot) -> None:
                 "Hello! I'm your Random bot. Use /random to get random media."
             )
 
+        _refresh_channel_ids_cache()
+
     # Command to fetch random media
     @bot.message_handler(commands=['random'])
     def fetch_random_media(message):
         user_id = message.from_user.id
 
-        try:
-            channel_ids = databases.get_mapped_channel_ids()
-        except Exception:
-            logger.exception("Failed to list mapped channels")
-            bot.send_message(message.chat.id, "Could not load channels, try again later.")
-            return
-
-        if not channel_ids:
-            bot.send_message(message.chat.id, "No channels are mapped yet.")
-            return
-
-        random.shuffle(channel_ids)  # randomize channel choice
+        # random.shuffle(channel_ids)  # randomize channel choice
 
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton("Next"))
 
-        for channel_id in channel_ids:
-            media_map = _load_media_map(channel_id)
-            attempts = min(len(media_map), 10)
-            while media_map and attempts:
-                random_media_id = random.choice(media_map)
-                try:
-                    bot.forward_message(message.chat.id, channel_id, random_media_id)
-                    bot.send_message(message.chat.id, "Click 'Next' to get another one.", reply_markup=markup)
-                    return
-                except ApiTelegramException as exc:
-                    text = getattr(getattr(exc, "result", None), "text", "").lower()
-                    if "message to forward not found" in text or "message_id_invalid" in text or "message id invalid" in text:
-                        media_map = [mid for mid in media_map if mid != random_media_id]
-                        _persist_map(channel_id, media_map)
-                        attempts -= 1
-                        continue
-                    logger.exception("Telegram API error for channel %s", channel_id)
-                    break
-                except Exception:
-                    logger.exception("Error forwarding media from channel %s", channel_id)
-                    break
+        channel_ids = _get_channel_ids()
+        if not channel_ids:
+            bot.send_message(message.chat.id, "No channels are mapped yet.")
+            return
+        channel_id = random.choice(channel_ids)
+
+        media_map = _load_media_map(channel_id)
+        attempts = min(len(media_map), 10)
+        while media_map and attempts:
+            random_media_id = random.choice(media_map)
+            try:
+                bot.forward_message(message.chat.id, channel_id, random_media_id)
+                bot.send_message(message.chat.id, "Click 'Next' to get another one.", reply_markup=markup)
+                return
+            except ApiTelegramException as exc:
+                text = getattr(getattr(exc, "result", None), "text", "").lower()
+                if "message to forward not found" in text or "message_id_invalid" in text or "message id invalid" in text:
+                    media_map = [mid for mid in media_map if mid != random_media_id]
+                    _persist_map(channel_id, media_map)
+                    attempts -= 1
+                    continue
+                logger.exception("Telegram API error for channel %s", channel_id)
+                break
+            except Exception:
+                logger.exception("Error forwarding media from channel %s", channel_id)
+                break
 
         bot.send_message(
             message.chat.id,
