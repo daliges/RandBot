@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import sqlite3
 from pathlib import Path
@@ -119,6 +120,18 @@ def initialize() -> None:
                 idx_refunds_bundle ON refunds(bundle_id);
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS subscription_intents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                channel_id INTEGER NOT NULL,
+                clicked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'subscribed', 'not_subscribed')),
+                FOREIGN KEY (channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE
+            );
+            """
+        )
         conn.commit()
 
 
@@ -224,3 +237,53 @@ def get_channel_admin(channel_id: int) -> int | None:
     with _connect(CHANNELS_DB) as conn:
         row = conn.execute("SELECT admin_id FROM channels WHERE channel_id = ?", (channel_id,)).fetchone()
     return row["admin_id"] if row else None
+
+
+def delete_subs():
+    with _connect(CHANNELS_DB) as conn:
+        conn.execute(
+            """
+            DELETE FROM subscription_intents
+            WHERE status IN ('subscribed', 'not_subscribed')
+            """
+        )
+        conn.commit()
+
+
+def save_subscription_intent(user_id: int, channel_id: int) -> None:
+    with _connect(CHANNELS_DB) as conn:
+        conn.execute(
+            """
+            INSERT INTO subscription_intents (user_id, channel_id)
+            VALUES (?, ?)
+            ON CONFLICT(user_id, channel_id) DO UPDATE
+                SET clicked_at = excluded.clicked_at,
+                    status = 'pending'
+            """,
+            (user_id, channel_id),
+        )
+        conn.commit()
+
+
+def mark_intent_status(intent_id: int, status: str) -> None:
+    allowed_statuses = ('pending', 'subscribed', 'not_subscribed')
+    if status not in allowed_statuses:
+        raise ValueError(f"Invalid status: {status}. Must be one of {allowed_statuses}")
+    with _connect(CHANNELS_DB) as conn:
+        cursor = conn.execute(
+            "UPDATE subscription_intents SET status = ? WHERE id = ?",
+            (status, intent_id),
+        )
+        if cursor.rowcount == 0:
+            raise ValueError(f"Subscription intent {intent_id} not found")
+        conn.commit()
+
+def list_pending_intents(cutoff: datetime) -> list[sqlite3.Row]:
+    with _connect(CHANNELS_DB) as conn:
+        return conn.execute(
+            """
+            SELECT * FROM subscription_intents
+            WHERE status = 'pending' AND clicked_at <= ?
+            """,
+            (cutoff.isoformat(),),
+        ).fetchall()

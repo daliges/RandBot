@@ -63,6 +63,29 @@ def _refresh_channel_ids_cache() -> list[int]:
     return ids
 
 
+def _subscribe_keyboard(channel_id: int) -> types.InlineKeyboardMarkup:
+    kb = types.InlineKeyboardMarkup()
+    kb.add(types.InlineKeyboardButton("Subscribe", callback_data=f"subscribe:{channel_id}"))
+    return kb
+
+
+def _channel_link_and_name(bot: TeleBot, channel_id: int) -> tuple[str, str | None]:
+    chat = bot.get_chat(channel_id)
+    name = chat.title or "Channel"
+    link = f"https://t.me/{chat.username}" if getattr(chat, "username", None) else None
+    if not link:
+        try:
+            invite = bot.create_chat_invite_link(
+                channel_id, name="RandBot subscribe", creates_join_request=False
+            )
+            link = invite.invite_link
+        except ApiTelegramException as exc:
+            logger.warning("Could not create invite for %s: %s", channel_id, exc)
+            return name, None
+    return name, link
+
+
+
 def register(bot: TeleBot) -> None:
     @bot.message_handler(commands=['help'])
     def help(message):
@@ -131,8 +154,6 @@ def register(bot: TeleBot) -> None:
     def fetch_random_media(message):
         user_id = message.from_user.id
 
-        # random.shuffle(channel_ids)  # randomize channel choice
-
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton("Next"))
 
@@ -142,13 +163,26 @@ def register(bot: TeleBot) -> None:
             return
         channel_id = random.choice(channel_ids)
 
+        chat = bot.get_chat(channel_id)
+        channel_name = chat.title or "Channel"
+        channel_link = f"https://t.me/{chat.username}" if getattr(chat, "username", None) else None
+
         media_map = _load_media_map(channel_id)
         attempts = min(len(media_map), 10)
         while media_map and attempts:
             random_media_id = random.choice(media_map)
             try:
-                bot.forward_message(message.chat.id, channel_id, random_media_id)
-                bot.send_message(message.chat.id, "Click 'Next' to get another one.", reply_markup=markup)
+                channel_name, channel_link = _channel_link_and_name(bot, channel_id)
+                if not channel_link:
+                    bot.send_message(message.chat.id, f"Can't open {channel_name} right now.")
+                    return
+
+                bot.copy_message(
+                    chat_id=message.chat.id,
+                    from_chat_id=channel_id,
+                    message_id=random_media_id,
+                    reply_markup=_subscribe_keyboard(channel_id),
+                )
                 return
             except ApiTelegramException as exc:
                 text = getattr(getattr(exc, "result", None), "text", "").lower()
@@ -173,3 +207,38 @@ def register(bot: TeleBot) -> None:
         fetch_random_media(message)
 
     
+    @bot.callback_query_handler(func=lambda call: call.data and call.data.startswith("subscribe:"))
+    def handle_subscribe(call):
+        try:
+            _, raw_channel_id = call.data.split(":", 1)
+            channel_id = int(raw_channel_id)
+        except (ValueError, IndexError):
+            bot.answer_callback_query(call.id, "Invalid subscribe data.", show_alert=True)
+            return
+
+        name, link = _channel_link_and_name(bot, channel_id)
+        if not link or not str(link).startswith("http"):
+            bot.answer_callback_query(call.id, "Can't open the channel right now.", show_alert=True)
+            return
+
+        try:
+            databases.save_subscription_intent(call.from_user.id, channel_id)
+        except Exception:
+            logger.exception("Failed to save intent for user %s channel %s", call.from_user.id, channel_id)
+
+        url_kb = types.InlineKeyboardMarkup()
+        url_kb.add(types.InlineKeyboardButton(f"Open {name}", url=link))
+
+        bot.answer_callback_query(call.id)  # ack the tap; avoid URL in callback to prevent URL_INVALID
+        try:
+            bot.edit_message_reply_markup(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                reply_markup=url_kb,
+            )
+        except ApiTelegramException:
+            bot.send_message(call.message.chat.id, f"Open {name}", reply_markup=url_kb)
+
+
+
+  
