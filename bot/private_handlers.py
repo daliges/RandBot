@@ -66,6 +66,7 @@ def _refresh_channel_ids_cache() -> list[int]:
 def _subscribe_keyboard(channel_id: int) -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
     kb.add(types.InlineKeyboardButton("Subscribe", callback_data=f"subscribe:{channel_id}"))
+    kb.add(types.InlineKeyboardButton("Next", callback_data="Next"))
     return kb
 
 
@@ -154,8 +155,8 @@ def register(bot: TeleBot) -> None:
     def fetch_random_media(message):
         user_id = message.from_user.id
 
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add(types.KeyboardButton("Next"))
+        # markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        # markup.add(types.KeyboardButton("Next"))
 
         channel_ids = _get_channel_ids()
         if not channel_ids:
@@ -202,9 +203,15 @@ def register(bot: TeleBot) -> None:
             "Failed to fetch media. Please try again later.",
         )
 
-    @bot.message_handler(func=lambda msg: msg.text == "Next")
-    def next_random_media(message):
-        fetch_random_media(message)
+    # @bot.message_handler(func=lambda msg: msg.text == "Next")
+    # def next_random_media(message):
+    #     fetch_random_media(message)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "Next")
+    def handle_next_media(call):
+        fetch_random_media(call.message)  # reuse your existing logic
+        bot.answer_callback_query(call.id)
+
 
     
     @bot.callback_query_handler(func=lambda call: call.data and call.data.startswith("subscribe:"))
@@ -228,6 +235,7 @@ def register(bot: TeleBot) -> None:
 
         url_kb = types.InlineKeyboardMarkup()
         url_kb.add(types.InlineKeyboardButton(f"Open {name}", url=link))
+        url_kb.add(types.InlineKeyboardButton("Next", callback_data="Next"))
 
         bot.answer_callback_query(call.id)  # ack the tap; avoid URL in callback to prevent URL_INVALID
         try:
