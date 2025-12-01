@@ -117,3 +117,34 @@ def bundle_consumption_summary(bundle_id: int) -> dict | None:
             (bundle_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def find_expired_zero_consumption(now: datetime | None = None) -> list[dict]:
+    now_iso = (now or datetime.now(timezone.utc)).isoformat()
+    with _connect(CHANNELS_DB) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM bundles
+            WHERE status = 'active'
+            AND expires_at < ?
+            AND (consumed_free + consumed_paid) = 0
+            """,
+            (now_iso,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_active_channel_ids() -> list[int]:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with _connect(CHANNELS_DB) as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT b.channel_id
+            FROM bundles b
+            JOIN mappings m ON m.channel_id = b.channel_id
+            WHERE b.status = 'active' AND b.expires_at >= ?
+            """,
+            (now_iso,),
+        ).fetchall()
+    return [r["channel_id"] for r in rows]
+

@@ -6,6 +6,7 @@ from telebot.apihelper import ApiTelegramException
 import random, databases
 from databases import redis_client
 from bot.channel_watchers import _persist_map, MEDIA_CACHE_KEY
+import pay_databases
 
 CHANNEL_IDS_CACHE_KEY = os.getenv("CHANNEL_IDS_CACHE_KEY")
 CHANNEL_IDS_TTL = int(os.getenv("CHANNEL_IDS_TTL"))
@@ -47,9 +48,9 @@ def _get_channel_ids() -> list[int]:
 
     # fallback to DB
     try:
-        ids = databases.get_mapped_channel_ids()
+        ids = pay_databases.list_active_channel_ids()
     except Exception:
-        logger.exception("Failed to list mapped channels")
+        logger.exception("Failed to list active mapped channels")
         return []
 
     if ids:
@@ -155,9 +156,6 @@ def register(bot: TeleBot) -> None:
     def fetch_random_media(message):
         user_id = message.from_user.id
 
-        # markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        # markup.add(types.KeyboardButton("Next"))
-
         channel_ids = _get_channel_ids()
         if not channel_ids:
             bot.send_message(message.chat.id, "No channels are mapped yet.")
@@ -203,10 +201,6 @@ def register(bot: TeleBot) -> None:
             "Failed to fetch media. Please try again later.",
         )
 
-    # @bot.message_handler(func=lambda msg: msg.text == "Next")
-    # def next_random_media(message):
-    #     fetch_random_media(message)
-
     @bot.callback_query_handler(func=lambda c: c.data == "Next")
     def handle_next_media(call):
         fetch_random_media(call.message)  # reuse your existing logic
@@ -236,6 +230,17 @@ def register(bot: TeleBot) -> None:
         url_kb = types.InlineKeyboardMarkup()
         url_kb.add(types.InlineKeyboardButton(f"Open {name}", url=link))
         url_kb.add(types.InlineKeyboardButton("Next", callback_data="Next"))
+
+        # If already subscribed, show a popup and stop.
+        try:
+            member = bot.get_chat_member(channel_id, call.from_user.id)
+            already_in = getattr(member, "status", None) in ("member", "administrator", "creator")
+        except ApiTelegramException:
+            already_in = False
+
+        if already_in:
+            bot.answer_callback_query(call.id, "You’re already subscribed ✅", show_alert=True)
+            return
 
         bot.answer_callback_query(call.id)  # ack the tap; avoid URL in callback to prevent URL_INVALID
         try:

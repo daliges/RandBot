@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from telebot import TeleBot, logger, types
 from telebot.apihelper import ApiTelegramException
 from . import mapping
@@ -69,6 +70,20 @@ def register(bot: TeleBot) -> None:
         from_user = getattr(update, "from_user", None)
         admin_id = from_user.id if from_user else None
         _prompt_bundle_purchase(bot, update.chat.id, admin_id)
+
+        # Start free trial bundle if none active
+        active = pay_databases.get_active_bundle(channel_id)
+        if active:
+            return
+
+        pay_databases.create_bundle(
+            channel_id=channel_id,
+            stars_paid=0,
+            purchased_quota=0,
+            free_quota=FREE_TRIAL_QUOTA,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            telegram_charge_id=None,
+        )
 
     @bot.callback_query_handler(func=lambda call: call.data and call.data.startswith("buy_bundle:"))
     def handle_bundle_purchase(call) -> None:
