@@ -1,11 +1,13 @@
 import asyncio
 import json
+import logging
 from typing import Sequence
 
-from telebot import logger
 from telethon import events
 
 import databases
+
+logger = logging.getLogger(__name__)
 
 MEDIA_CACHE_KEY = "channel_media_map"
 _channel_locks: dict[int, asyncio.Lock] = {}

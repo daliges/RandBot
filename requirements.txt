@@ -1,6 +1,7 @@
-dotenv
-pyTelegramBotAPI
-telethon 
-redis 
-redis[hiredis]
-pytest
+python-dotenv>=1.0.0
+aiogram>=3.0.0
+telethon>=1.30.0
+redis>=4.0.0
+redis[hiredis]>=4.0.0
+pytest>=7.0.0
+pytest-asyncio>=0.20.0

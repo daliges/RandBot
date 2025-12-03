@@ -1,75 +1,59 @@
 import json
-from types import SimpleNamespace
+
+import pytest
 
 import bot.private_handlers as private_handlers
 import databases
+from tests.conftest import DummyCallback, DummyMessage
 
 
-def _find_handler(bot, command):
-    return next(
-        entry["handler"]
-        for entry in bot.message_handlers
-        if entry["commands"] and command in entry["commands"]
-    )
+def _channel_id():
+    return 555
 
 
-def test_set_bot_commands(fake_bot):
-    private_handlers.set_bot_commands(fake_bot)
+@pytest.mark.asyncio
+async def test_set_bot_commands(fake_bot):
+    await private_handlers.set_bot_commands(fake_bot)
     assert fake_bot.deleted_scopes
-    assert fake_bot.commands_set
     commands, scope = fake_bot.commands_set[-1]
     assert [cmd.command for cmd in commands] == ["help", "random", "admin"]
 
 
-def test_start_with_channel_links_user(monkeypatch, fake_bot):
-    private_handlers.register(fake_bot)
-    databases.link_user_to_channel = lambda *args, **kwargs: None
-    handler = _find_handler(fake_bot, "start")
-    message = SimpleNamespace(
-        chat=SimpleNamespace(id=50),
-        text="/start channel_-1001",
-        from_user=SimpleNamespace(id=77),
-    )
+@pytest.mark.asyncio
+async def test_start_with_channel_links_user(monkeypatch, fake_bot):
+    captured = {}
+    monkeypatch.setattr(databases, "link_user_to_channel", lambda uid, cid: captured.setdefault("channel", cid))
     fake_bot.register_chat(-1001, "Some Channel")
-    handler(message)
-    assert "connected to the channel" in fake_bot.sent_messages[-1]["text"]
+    message = DummyMessage(chat_id=50, user_id=77, text="/start channel_-1001")
+    await private_handlers.start(message, fake_bot)
+    assert captured["channel"] == -1001
+    assert any("connected to the channel" in reply["text"] for reply in message.replies)
 
 
-def test_start_without_link(fake_bot):
-    private_handlers.register(fake_bot)
-    handler = _find_handler(fake_bot, "start")
-    message = SimpleNamespace(
-        chat=SimpleNamespace(id=60),
-        text="/start",
-        from_user=SimpleNamespace(id=88),
-    )
-    handler(message)
-    assert "Use /random" in fake_bot.sent_messages[-1]["text"]
+@pytest.mark.asyncio
+async def test_start_without_link(fake_bot):
+    message = DummyMessage(chat_id=60, user_id=88, text="/start")
+    await private_handlers.start(message, fake_bot)
+    assert any("Use /random" in reply["text"] for reply in message.replies)
 
 
-def test_random_requires_link(monkeypatch, fake_bot):
-    private_handlers.register(fake_bot)
-    handler = _find_handler(fake_bot, "random")
-    message = SimpleNamespace(
-        chat=SimpleNamespace(id=70),
-        from_user=SimpleNamespace(id=22),
-    )
-    monkeypatch.setattr(databases, "get_user_channel", lambda uid: None)
-    handler(message)
-    assert "not connected" in fake_bot.sent_messages[-1]["text"]
+@pytest.mark.asyncio
+async def test_random_uses_cached_map(monkeypatch, fake_bot, fake_redis):
+    channel_id = _channel_id()
+    fake_bot.register_chat(channel_id, "Some Channel", username="channel")
+    fake_redis.setex(private_handlers.CHANNEL_IDS_CACHE_KEY, 100, json.dumps([channel_id]))
+    fake_redis.hset(private_handlers.MEDIA_CACHE_KEY, str(channel_id), json.dumps([1, 2]))
+    message = DummyMessage(chat_id=80, user_id=33, text="/random")
+    await private_handlers.fetch_random_media(message, fake_bot)
+    assert fake_bot.copied_messages
+    assert fake_bot.copied_messages[-1]["reply_markup"] is not None
 
 
-def test_random_uses_cached_map(monkeypatch, fake_bot, fake_redis):
-    channel_id = 555
-    private_handlers.register(fake_bot)
-    handler = _find_handler(fake_bot, "random")
-    fake_redis.hset("channel_media_map", str(channel_id), json.dumps([1, 2]))
-    monkeypatch.setattr(databases, "get_user_channel", lambda user_id: channel_id)
-    handler(
-        SimpleNamespace(
-            chat=SimpleNamespace(id=80),
-            from_user=SimpleNamespace(id=33),
-        )
-    )
-    assert fake_bot.forwarded_messages
-    assert fake_bot.sent_messages[-1]["reply_markup"] is not None
+@pytest.mark.asyncio
+async def test_subscribe_shows_alert_for_existing_member(monkeypatch, fake_bot):
+    channel_id = _channel_id()
+    fake_bot.register_chat(channel_id, "Channel", username="channel")
+    fake_bot.set_chat_member(channel_id, 99, private_handlers.ChatMemberStatus.MEMBER)
+    callback = DummyCallback(data=f"subscribe:{channel_id}", from_user=99, message=DummyMessage(chat_id=1))
+    await private_handlers.handle_subscribe(callback, fake_bot)
+    assert callback.answers[-1]["show_alert"] is True
