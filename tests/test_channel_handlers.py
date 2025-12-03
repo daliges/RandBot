@@ -2,7 +2,7 @@ import pytest
 from aiogram.enums import ChatMemberStatus
 
 import bot.channel_handlers as channel_handlers
-import databases
+from data import databases
 from tests.conftest import DummyMessage, make_update
 
 

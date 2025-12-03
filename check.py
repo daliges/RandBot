@@ -10,9 +10,8 @@ from aiogram.exceptions import TelegramAPIError
 from dotenv import load_dotenv
 
 import app_context
-import databases
-import pay_databases
-from databases import get_channel_admin, list_pending_intents, mark_intent_status
+from data import databases, pay_databases
+from data.databases import get_channel_admin, list_pending_intents, mark_intent_status
 
 load_dotenv()
 

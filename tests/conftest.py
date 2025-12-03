@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import app_context
-import databases
+from data import databases
 import bot.private_handlers as private_handlers
 
 

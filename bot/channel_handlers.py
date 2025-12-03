@@ -15,8 +15,7 @@ from aiogram.types import (
     PreCheckoutQuery,
 )
 
-import databases
-import pay_databases
+from data import databases, pay_databases
 from . import mapping
 from .inviter import ensure_mapping_account_added, send_channel_message_with_deep_link
 

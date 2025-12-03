@@ -3,7 +3,7 @@ import json
 import pytest
 
 import bot.private_handlers as private_handlers
-import databases
+from data import databases
 from tests.conftest import DummyCallback, DummyMessage
 
 

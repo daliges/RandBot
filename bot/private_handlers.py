@@ -17,10 +17,9 @@ from aiogram.types import (
     Message,
 )
 
-import databases
-import pay_databases
+from data import databases, pay_databases
 from bot.channel_watchers import MEDIA_CACHE_KEY, _persist_map
-from databases import redis_client
+from data.databases import redis_client
 
 CHANNEL_IDS_CACHE_KEY = os.getenv("CHANNEL_IDS_CACHE_KEY", "channel_ids_cache")
 CHANNEL_IDS_TTL = int(os.getenv("CHANNEL_IDS_TTL", "300"))

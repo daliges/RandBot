@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone
-from dotenv import load_dotenv
-from databases import _connect
 from pathlib import Path
 
 import sqlite3
 import os
+
+from dotenv import load_dotenv
+
+from .databases import _connect
 
 
 load_dotenv()
@@ -147,4 +149,3 @@ def list_active_channel_ids() -> list[int]:
             (now_iso,),
         ).fetchall()
     return [r["channel_id"] for r in rows]
-

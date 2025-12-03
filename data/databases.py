@@ -128,6 +128,7 @@ def initialize() -> None:
                 channel_id INTEGER NOT NULL,
                 clicked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'subscribed', 'not_subscribed')),
+                UNIQUE(user_id, channel_id),
                 FOREIGN KEY (channel_id) REFERENCES channels(channel_id) ON DELETE CASCADE
             );
             """

@@ -5,7 +5,7 @@ from typing import Sequence
 
 from telethon import events
 
-import databases
+from data import databases
 
 logger = logging.getLogger(__name__)
 

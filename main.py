@@ -7,7 +7,7 @@ from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 
 import app_context
-import databases
+from data import databases
 from bot.channel_handlers import register as register_channel, register_payments
 from bot.private_handlers import register as register_private, set_bot_commands
 from telethon_runner import init_telethon

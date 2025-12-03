@@ -1,6 +1,6 @@
 import asyncio
 import app_context
-import databases
+from data import databases
 
 
 async def _collect_media_ids(channel_id: int) -> list[int]:

@@ -1,5 +1,5 @@
 import bot.mapping as mapping
-import databases
+from data import databases
 
 
 def test_returns_cached_map(monkeypatch):
