@@ -77,7 +77,7 @@ def get_active_bundle(channel_id: int) -> dict | None:
             """
             SELECT * FROM bundles
             WHERE channel_id = ? AND status = 'active' AND expires_at >= ?
-            ORDER BY starts_at DESC LIMIT 1
+            ORDER BY starts_at DESC, id DESC LIMIT 1
             """,
             (channel_id, datetime.now(timezone.utc).isoformat()),
         ).fetchone()

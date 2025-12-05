@@ -29,7 +29,7 @@ def initialize() -> None:
             CREATE TABLE IF NOT EXISTS channels (
                 channel_id INTEGER PRIMARY KEY,
                 channel_name TEXT NOT NULL,
-                admin_id INTEGER NOT NULL
+                admin_id INTEGER
             )
             """
         )
@@ -240,6 +240,13 @@ def get_channel_admin(channel_id: int) -> int | None:
     return row["admin_id"] if row else None
 
 
+def list_admin_channel_ids(admin_id: int) -> list[int]:
+    with _connect(CHANNELS_DB) as conn:
+        rows = conn.execute("SELECT channel_id FROM channels WHERE admin_id = ?", (admin_id,)).fetchall()
+    return [row["channel_id"] for row in rows]
+
+
+
 def delete_subs():
     with _connect(CHANNELS_DB) as conn:
         conn.execute(
@@ -280,11 +287,12 @@ def mark_intent_status(intent_id: int, status: str) -> None:
         conn.commit()
 
 def list_pending_intents(cutoff: datetime) -> list[sqlite3.Row]:
+    cutoff_str = cutoff.isoformat()
     with _connect(CHANNELS_DB) as conn:
         return conn.execute(
             """
             SELECT * FROM subscription_intents
-            WHERE status = 'pending' AND clicked_at <= ?
+            WHERE status = 'pending' AND datetime(clicked_at) <= datetime(?)
             """,
-            (cutoff.isoformat(),),
+            (cutoff_str,),
         ).fetchall()

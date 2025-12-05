@@ -20,6 +20,7 @@ from aiogram.types import (
 from data import databases, pay_databases
 from bot.channel_watchers import MEDIA_CACHE_KEY, _persist_map
 from data.databases import redis_client
+from .utils import prompt_bundle_purchase, subscribe_keyboard, channel_link_and_name, get_channel_name
 
 CHANNEL_IDS_CACHE_KEY = os.getenv("CHANNEL_IDS_CACHE_KEY", "channel_ids_cache")
 CHANNEL_IDS_TTL = int(os.getenv("CHANNEL_IDS_TTL", "300"))
@@ -78,58 +79,45 @@ async def _refresh_channel_ids_cache() -> list[int]:
     return await _get_channel_ids()
 
 
-def _subscribe_keyboard(channel_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Subscribe", callback_data=f"subscribe:{channel_id}")],
-            [InlineKeyboardButton(text="Next", callback_data="Next")],
-        ]
-    )
-
-
-async def _channel_link_and_name(bot: Bot, channel_id: int) -> tuple[str, str | None]:
-    chat = await bot.get_chat(channel_id)
-    name = chat.title or "Channel"
-    link = f"https://t.me/{chat.username}" if getattr(chat, "username", None) else None
-    if not link:
-        try:
-            invite = await bot.create_chat_invite_link(
-                channel_id, name="RandBot subscribe", creates_join_request=False
-            )
-            link = invite.invite_link
-        except TelegramAPIError as exc:
-            logger.warning("Could not create invite for %s: %s", channel_id, exc)
-            return name, None
-    return name, link
-
-
-async def _get_channel_name(bot: Bot, channel_id: int) -> str:
-    try:
-        chat = await bot.get_chat(channel_id)
-        return chat.title or "Unknown Channel"
-    except Exception as exc:
-        logger.warning("Error fetching channel name for ID %s: %s", channel_id, exc)
-        return "Unknown Channel"
-
-
 @router.message(Command("help"))
 async def help_cmd(message: Message) -> None:
     await message.answer(
-        "This bot allows you to get random media from the channel you link via deep link. "
-        "\nUse command /random to get random media from the channel "
-        "\nIf you are an admin, use /admin for admin help."
+        "This bot sends random media from linked channels.\n"
+        "Use /random to get item.\n"
+        "Admins: use /admin for admin commands and tips."
     )
 
 
 @router.message(Command("admin"))
 async def admin_help(message: Message) -> None:
     await message.answer(
-        "Admin Help:\n"
-        "Add the bot as an admin to your channel with permission to post messages "
-        "and add subscribers.\n"
-        "Don't worry the bot will add only one subscriber (itself) to your channel.\n"
-        "It's made to ensure the bot can function properly."
+        "Purpose: \nShares random media from linked channels " \
+        "so users can pull a surprise item on demand. "
+        "It's made to help channels promote their content and give users an easier way to find channels.\n\n" \
+        "How it works: \nYou add bot as admin to your channel; bot scans and adds all content to common feed; "
+        "then /random returns a random channel and post from it.\n" \
+        "If you don't get it, think of it as TikTok feed but for Telegram channels.\n\n"
+        "Payments & traffic: \nAdding the bot gives trial with 10 free subscribers; " \
+        "your channel stays in /random while any trial/bundle is active.\n"
+        "Quota is spent when people subscribe; only the first join per user counts and "
+        "if person stays for certain time in channel. " \
+        "We spend free quota first, then paid.\n"
+        "If free quota is used and there's no paid bundle, " \
+        "traffic pauses and we'll prompt you to buy.\n"
+        "If no users subscribe within a month, stars are auto-refunded/credited.\n" \
+        "Use /bundles to see purchase options."
     )
+
+
+@router.message(Command("bundles"))
+async def bundles_info(message: Message) -> None:
+    admin_id = getattr(message.from_user, "id", None)
+    channels = await asyncio.to_thread(databases.list_admin_channel_ids, admin_id)
+    if not channels:
+        await message.answer("I don't see any channels you admin that are linked to the bot.")
+        return
+    channel_id = channels[0]  # or prompt to choose if multiple
+    await prompt_bundle_purchase(message.bot, channel_id, admin_id)
 
 
 @router.message(CommandStart())
@@ -151,10 +139,10 @@ async def start(message: Message, bot: Bot) -> None:
             await message.answer("Invalid deep link format.")
             return
 
-        channel_name = await _get_channel_name(bot, channel_id)  # type: ignore[arg-type]
+        channel_name = await get_channel_name(bot, channel_id)  # type: ignore[arg-type]
         await message.answer(
-            f"Hello! You are now connected to the channel : {channel_name}. "
-            "Use /random to get random media from the channel."
+            f"Hello! The channel is connected to the bot now. "
+            "Use /random to get random media from linked channels."
         )
     else:
         await message.answer("Hello! I'm your Random bot. Use /random to get random media.")
@@ -174,7 +162,7 @@ async def _fetch_random_media(message: Message, bot: Bot) -> None:
     while media_map and attempts:
         random_media_id = random.choice(media_map)
         try:
-            name, link = await _channel_link_and_name(bot, channel_id)
+            name, link = await channel_link_and_name(bot, channel_id)
             if not link:
                 await message.answer(f"Can't open {name} right now.")
                 return
@@ -183,7 +171,7 @@ async def _fetch_random_media(message: Message, bot: Bot) -> None:
                 chat_id=message.chat.id,
                 from_chat_id=channel_id,
                 message_id=random_media_id,
-                reply_markup=_subscribe_keyboard(channel_id),
+                reply_markup=subscribe_keyboard(channel_id),
             )
             return
         except TelegramBadRequest as exc:
@@ -223,7 +211,7 @@ async def handle_subscribe(call: CallbackQuery, bot: Bot) -> None:
         await call.answer("Invalid subscribe data.", show_alert=True)
         return
 
-    name, link = await _channel_link_and_name(bot, channel_id)
+    name, link = await channel_link_and_name(bot, channel_id)
     if not link or not str(link).startswith("http"):
         await call.answer("Can't open the channel right now.", show_alert=True)
         return

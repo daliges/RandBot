@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -7,11 +8,12 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+os.environ.setdefault("CHANNELS_DB_PATH", str(ROOT / "channels.db"))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import app_context
-from data import databases
+from data import databases, pay_databases
 import bot.private_handlers as private_handlers
 
 
@@ -160,6 +162,8 @@ def reset_app_context():
 def temp_db(tmp_path, monkeypatch):
     db_path = tmp_path / "channels.db"
     monkeypatch.setattr(databases, "CHANNELS_DB", db_path)
+    monkeypatch.setattr(pay_databases, "CHANNELS_DB", db_path)
+    monkeypatch.setenv("CHANNELS_DB_PATH", str(db_path))
     databases.initialize()
     yield
     sqlite3.connect(db_path).close()

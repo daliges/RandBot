@@ -8,8 +8,6 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (
     CallbackQuery,
     ChatMemberUpdated,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     LabeledPrice,
     Message,
     PreCheckoutQuery,
@@ -18,51 +16,13 @@ from aiogram.types import (
 from data import databases, pay_databases
 from . import mapping
 from .inviter import ensure_mapping_account_added, send_channel_message_with_deep_link
+from .utils import FREE_TRIAL_QUOTA, BUNDLE_OPTIONS, get_channel_name, bundle_keyboard, prompt_bundle_purchase
 
-FREE_TRIAL_QUOTA = 10
-BUNDLE_OPTIONS = {
-    "20": {"title": "20 subs", "quota": 20, "stars": 100},
-    "50": {"title": "50 subs", "quota": 50, "stars": 250},
-    "100": {"title": "100 subs", "quota": 100, "stars": 500},
-    "500": {"title": "500 subs", "quota": 500, "stars": 2500},
-    "1000": {"title": "1000 subs", "quota": 1000, "stars": 5000},
-}
 
 logger = logging.getLogger(__name__)
 
 channel_router = Router()
 payments_router = Router()
-
-
-def _bundle_keyboard(channel_id: int) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"{opt['title']} • {opt['stars']}⭐️",
-                    callback_data=f"buy_bundle:{channel_id}:{key}",
-                )
-            ]
-            for key, opt in BUNDLE_OPTIONS.items()
-        ]
-    )
-    return kb
-
-
-async def _prompt_bundle_purchase(bot: Bot, channel_id: int, admin_user_id: int | None) -> None:
-    text = (
-        "Choose a bundle to start the campaign.\n"
-        f"Includes {FREE_TRIAL_QUOTA} free trial subs;\n"
-        "(refund only if zero subs in 30 days.)"
-    )
-    keyboard = _bundle_keyboard(channel_id)
-    if admin_user_id:
-        try:
-            await bot.send_message(admin_user_id, text, reply_markup=keyboard)
-            return
-        except TelegramAPIError as exc:
-            logger.warning("Could not DM admin %s: %s", admin_user_id, exc)
-    await bot.send_message(channel_id, text, reply_markup=keyboard)
 
 
 @channel_router.my_chat_member()
@@ -112,7 +72,7 @@ async def handle_admin_promotion(update: ChatMemberUpdated, bot: Bot) -> None:
             admin_id if admin_id else update.chat.id,
             f"Free trial started: {FREE_TRIAL_QUOTA} subscribers included. "
             "We will notify you to buy a bundle once the trial is used.",
-            reply_markup=_bundle_keyboard(update.chat.id),
+            reply_markup=bundle_keyboard(update.chat.id),
         )
     except TelegramAPIError as exc:
         logger.warning("Could not send free trial notice for %s: %s", update.chat.id, exc)
@@ -120,33 +80,41 @@ async def handle_admin_promotion(update: ChatMemberUpdated, bot: Bot) -> None:
 
 @payments_router.callback_query(F.data.startswith("buy_bundle:"))
 async def handle_bundle_purchase(call: CallbackQuery, bot: Bot) -> None:
+    channel_id = bundle_key = None
     try:
-        member = await bot.get_chat_member(channel_id, call.from_user.id)  # type: ignore[arg-type]
-        if member.status not in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR):
-            await call.answer("Only channel admins can buy.", show_alert=True)
+        _, channel_id_str, bundle_key = call.data.split(":", 2)  # type: ignore[union-attr]
+        channel_id = int(channel_id_str)
+    except Exception:
+        channels = await asyncio.to_thread(databases.list_admin_channel_ids, call.from_user.id)  # type: ignore[arg-type]
+        if not channels:
+            await call.answer("I can't find a linked channel for you.", show_alert=True)
             return
-    except TelegramAPIError:
-        logger.warning("Could not verify admin status for %s in %s", getattr(call.from_user, "id", None), channel_id)
-        await call.answer("Could not verify admin status. Please try again.", show_alert=True)
-        return
+        channel_id = channels[0]  # or prompt to pick if multiple
+        bundle_key = "20"  # or require user to pick a bundle first
+
+    option = BUNDLE_OPTIONS.get(bundle_key)
     if not option:
         await call.answer("Bundle not found.", show_alert=True)
         return
 
+    stored_admin_id = await asyncio.to_thread(databases.get_channel_admin, channel_id)
+    telegram_admin = False
     try:
         member = await bot.get_chat_member(channel_id, call.from_user.id)  # type: ignore[arg-type]
-        if member.status not in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR):
-            await call.answer("Only channel admins can buy.", show_alert=True)
-            return
+        telegram_admin = member.status in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR)
     except TelegramAPIError:
         logger.warning("Could not verify admin status for %s in %s", getattr(call.from_user, "id", None), channel_id)
+
+    if not ((stored_admin_id == call.from_user.id) or telegram_admin):
+        await call.answer("Only channel admins can buy.", show_alert=True)
+        return
 
     payload = f"{channel_id}:{bundle_key}"
     desc = f"{option['quota']} paid subs bundle. Includes {FREE_TRIAL_QUOTA} free trial subs."
     prices = [LabeledPrice(label=f"{option['quota']} subscribers", amount=option["stars"])]
     await bot.send_invoice(
-        chat_id=call.from_user.id,  # type: ignore[arg-type]
-        title=f"{option['title']} for channel {channel_id}",
+        chat_id=call.from_user.id,  # send to user’s DM
+        title=f"{option['title']} for channel {await get_channel_name(bot, channel_id)}",
         description=desc,
         payload=payload,
         provider_token="",
@@ -218,7 +186,7 @@ async def handle_new_channel_member(update: ChatMemberUpdated, bot: Bot) -> None
     if free_exhausted and summary["purchased_quota"] == 0 and summary["status"] == "active":
         await asyncio.to_thread(pay_databases.mark_bundle_status, active["id"], "expired")
         admin_id = await asyncio.to_thread(databases.get_channel_admin, channel_id)
-        await _prompt_bundle_purchase(bot, channel_id, admin_id)
+        await prompt_bundle_purchase(bot, channel_id, admin_id)
 
 
 def register(dp: Dispatcher) -> None:
