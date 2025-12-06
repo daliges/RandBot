@@ -27,7 +27,7 @@ async def test_start_with_channel_links_user(monkeypatch, fake_bot):
     message = DummyMessage(chat_id=50, user_id=77, text="/start channel_-1001")
     await private_handlers.start(message, fake_bot)
     assert captured["channel"] == -1001
-    assert any("connected to the channel" in reply["text"] for reply in message.replies)
+    assert any("channel is connected to the bot now" in reply["text"] for reply in message.replies)
 
 
 @pytest.mark.asyncio
