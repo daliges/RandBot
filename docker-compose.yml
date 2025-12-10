@@ -9,6 +9,8 @@ services:
     env_file: .env
     depends_on:
       - redis
+    ports:
+      - "127.0.0.1:8484:8484"
     volumes:
       - ./channels.db:/app/channels.db
       - ./randbot.dev.session:/app/randbot.dev.session
