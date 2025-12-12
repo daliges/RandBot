@@ -15,6 +15,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    BotCommandScopeAllPrivateChats,
 )
 
 from data import databases, pay_databases
@@ -30,13 +31,14 @@ logger = logging.getLogger(__name__)
 
 
 async def set_bot_commands(bot: Bot) -> None:
-    await bot.delete_my_commands(scope=BotCommandScopeDefault())
     commands = [
         BotCommand(command="help", description="Help and info about the bot"),
         BotCommand(command="random", description="Get random media from the channel"),
         BotCommand(command="admin", description="Admin help info"),
     ]
-    await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
+    for scope in (BotCommandScopeDefault(), BotCommandScopeAllPrivateChats()):
+        await bot.delete_my_commands(scope=scope)
+        await bot.set_my_commands(commands, scope=scope)
 
 
 async def _load_media_map(channel_id: int) -> list[int]:
