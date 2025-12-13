@@ -24,9 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compute tag
-        id: meta
-        run: echo "tag=main-${GITHUB_SHA}" >> $GITHUB_OUTPUT
+      - name: Compute lowercase image name + tag
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "TAG=main-${GITHUB_SHA}" >> $GITHUB_ENV
 
       - uses: docker/setup-buildx-action@v3
 
