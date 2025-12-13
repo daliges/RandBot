@@ -1,6 +1,3 @@
-import asyncio
-from types import SimpleNamespace
-
 import pytest
 
 import app_context

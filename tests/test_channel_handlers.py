@@ -3,7 +3,7 @@ from aiogram.enums import ChatMemberStatus
 
 import bot.channel_handlers as channel_handlers
 from data import databases
-from tests.conftest import DummyMessage, make_update
+from tests.conftest import make_update
 
 
 @pytest.mark.asyncio

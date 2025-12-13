@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 import sqlite3
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 from dotenv import load_dotenv
 import os
 import redis

@@ -141,9 +141,8 @@ async def start(message: Message, bot: Bot) -> None:
             await message.answer("Invalid deep link format.")
             return
 
-        channel_name = await get_channel_name(bot, channel_id)  # type: ignore[arg-type]
         await message.answer(
-            f"Hello! The channel is connected to the bot now. "
+            "Hello! The channel is connected to the bot now. "
             "Use /random to get random media from linked channels."
         )
     else:
