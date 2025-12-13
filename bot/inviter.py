@@ -64,7 +64,7 @@ async def ensure_mapping_account_added(channel_id: int, bot: Bot) -> bool:
         logger.warning("Failed to create invite link for %s: %s", channel_id, api_exc)
         await bot.send_message(
             channel_id,
-            "I need the 'Add Users' permission to invite my helper account.\n"
+            "I need the 'Add Users' permission to invite my helper account. "
             "Please grant that permission and try again.",
         )
         return False
