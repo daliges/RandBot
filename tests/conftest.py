@@ -4,17 +4,15 @@ import sqlite3
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-
+import app_context
+from data import databases, pay_databases
+import bot.private_handlers as private_handlers
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 os.environ.setdefault("CHANNELS_DB_PATH", str(ROOT / "channels.db"))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-import app_context
-from data import databases, pay_databases
-import bot.private_handlers as private_handlers
 
 
 class DummyFuture:
