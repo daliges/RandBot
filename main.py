@@ -16,7 +16,7 @@ from telethon_runner import init_telethon
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_BASE = os.getenv("WEBHOOK_BASE")  # e.g. https://randbot.online
+WEBHOOK_BASE = os.getenv("WEBHOOK_BASE")  
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH")  # optional; defaults to /webhook/<token>
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 WEBHOOK_PORT = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", 8080)))
