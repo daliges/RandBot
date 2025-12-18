@@ -36,3 +36,6 @@ jobs:
 
       - name: Pytest
         run: pytest -q
+
+      - name: Aqua Security Trivy
+        uses: aquasecurity/trivy-action@0.33.1
