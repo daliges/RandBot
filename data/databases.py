@@ -296,3 +296,14 @@ def list_pending_intents(cutoff: datetime) -> list[sqlite3.Row]:
             """,
             (cutoff_str,),
         ).fetchall()
+ 
+
+def has_subscription_intent(channel_id: int) -> bool:
+    with _connect(CHANNELS_DB) as conn:
+        row = conn.execute(
+            "SELECT 1 FROM subscription_intents " \
+            "WHERE channel_id = ? LIMIT 1 " \
+            "AND status = 'pending'",
+            (channel_id,),
+        ).fetchone()
+    return row is not None

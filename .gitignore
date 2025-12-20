@@ -173,3 +173,11 @@ appendonly.aof
 
 # Other files
 pics/
+
+# SSH keys
+.ssh/
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+known_hosts

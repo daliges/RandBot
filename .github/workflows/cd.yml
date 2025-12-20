@@ -46,6 +46,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.tag }}
             ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:main-latest
 
+      - name: Aqua Security Trivy
+        uses: aquasecurity/trivy-action@0.33.1
+        
   deploy_prod:
     needs: build_and_push
     runs-on: ubuntu-latest
@@ -59,7 +62,7 @@ jobs:
           passphrase: ${{ secrets.EC2_SSH_PASSPHRASE }}
           script: |
             set -e
-            cd /opt/randbot
+            cd /home/ubuntu/randbot
             export IMAGE_TAG=${{ needs.build_and_push.outputs.image_tag }}
             docker compose pull
             docker compose up -d --remove-orphans
