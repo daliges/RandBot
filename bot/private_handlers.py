@@ -206,19 +206,23 @@ async def handle_next_media(call: CallbackQuery, bot: Bot) -> None:
 @router.callback_query(F.data.startswith("subscribe:"))
 async def handle_subscribe(call: CallbackQuery, bot: Bot) -> None:
     try:
-        _, raw_channel_id = call.data.split(":", 1)  # type: ignore[union-attr]
+        _, raw_channel_id = call.data.split(":", 1)  
         channel_id = int(raw_channel_id)
+        allowed = await _get_channel_ids() 
+        if channel_id not in allowed:
+            await call.answer("This channel is not available right now.", show_alert=True)
+            return
     except (ValueError, AttributeError):
         await call.answer("Invalid subscribe data.", show_alert=True)
         return
-
+    
     name, link = await channel_link_and_name(bot, channel_id)
     if not link or not str(link).startswith("http"):
         await call.answer("Can't open the channel right now.", show_alert=True)
         return
 
     try:
-        await asyncio.to_thread(databases.save_subscription_intent, call.from_user.id, channel_id)  # type: ignore[arg-type]
+        await asyncio.to_thread(databases.save_subscription_intent, call.from_user.id, channel_id)  
     except Exception:
         logger.exception("Failed to save intent for user %s channel %s", getattr(call.from_user, "id", None), channel_id)
 
@@ -230,7 +234,7 @@ async def handle_subscribe(call: CallbackQuery, bot: Bot) -> None:
     )
 
     try:
-        member = await bot.get_chat_member(channel_id, call.from_user.id)  # type: ignore[arg-type]
+        member = await bot.get_chat_member(channel_id, call.from_user.id)  
         already_in = getattr(member, "status", None) in (
             ChatMemberStatus.MEMBER,
             ChatMemberStatus.ADMINISTRATOR,
