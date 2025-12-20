@@ -70,7 +70,7 @@ jobs:
           passphrase: ${{ secrets.EC2_SSH_PASSPHRASE }}
           script: |
             set -e
-            cd /home/ubuntu/randbot
+            cd /opt/randbot
             export IMAGE_TAG=${{ needs.build_and_push.outputs.image_tag }}
             docker compose pull
             docker compose up -d --remove-orphans
