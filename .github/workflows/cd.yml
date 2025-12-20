@@ -46,9 +46,17 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.tag }}
             ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:main-latest
 
-      - name: Aqua Security Trivy
+      - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@0.33.1
-        
+        with:
+          scan-type: image
+          image-ref: ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:${{ steps.vars.outputs.tag }}
+          format: table
+          exit-code: "1"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+
   deploy_prod:
     needs: build_and_push
     runs-on: ubuntu-latest
