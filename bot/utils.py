@@ -70,8 +70,13 @@ async def prompt_bundle_purchase(bot: Bot, channel_id: int, admin_user_id: int |
 async def channel_link_and_name(bot: Bot, channel_id: int) -> tuple[str, str | None]:
     chat = await bot.get_chat(channel_id)
     name = chat.title or "Channel"
-    link = f"https://t.me/{chat.username}" if getattr(chat, "username", None) else None
-    if not link:
+
+    link = None
+    if getattr(chat, "username", None):
+        link = f"https://t.me/{chat.username}"
+    elif getattr(chat, "invite_link", None):
+        link = chat.invite_link
+    else:
         try:
             invite = await bot.create_chat_invite_link(
                 channel_id, name="RandBot subscribe", creates_join_request=False
